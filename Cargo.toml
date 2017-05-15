@@ -1,0 +1,6 @@
+[package]
+name = "hyena"
+version = "0.1.0"
+authors = ["Przemyslaw M. Maciolek <pmm@collective-sense.com>"]
+
+[dependencies]
