@@ -1,6 +1,7 @@
+extern crate rand;
+use rand::Rng;
 use std::time::Instant;
 
-//extern crate catalog;
 
 pub mod catalog;
 pub mod scan;
@@ -10,8 +11,19 @@ pub mod int_blocks;
 use catalog::Catalog;
 use catalog::Column;
 use catalog::BlockType;
+use partition::Partition;
 
 static TEST_COLS_DENSE_I64: i32 = 20;
+static TEST_ROWS_PER_PART: i32 = 1000000;
+
+fn fill_partition(part : &mut Partition) {
+    let mut rng = rand::thread_rng();
+
+    for x in 0..TEST_COLS_DENSE_I64 {
+        let mut col = &mut part.blocks[0];
+        col.append(rng.gen::<u64>());
+    }
+}
 
 fn main() {
     let start = Instant::now();
@@ -22,8 +34,9 @@ fn main() {
         catalog.add_column(BlockType::Int64Dense, format!("col_{}", x));
     }
 
-    let partition = catalog.create_partition();
-//    partition.blocks[0];
+    let mut partition : Partition = catalog.create_partition();
+    fill_partition(&mut partition);
+
 
     println!("Following columns are defined");
     for col in catalog.columns.iter_mut() {

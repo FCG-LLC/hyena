@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(unused_variables)]
 pub enum ScanComparison {
     Lt,
     LtEq,

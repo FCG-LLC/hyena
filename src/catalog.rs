@@ -1,8 +1,9 @@
 use int_blocks::Int64DenseBlock;
+use int_blocks::Int64SparseBlock;
 use partition::Partition;
 
-#[repr(i8)]
-#[derive(Debug)]
+//#[repr(u8)]
+#[derive(Debug,Clone,PartialEq)]
 pub enum BlockType {
     Int64Dense,
     Int64Sparse
@@ -28,11 +29,15 @@ impl Catalog {
         self.columns.push(Column { data_type: data_type, name: name });
     }
 
-    pub fn create_partition(&self) -> Partition {
+    pub fn create_partition<'a>(&self) -> Partition {
         let mut blocks = Vec::new();
-//        for col in self.columns {
-//            blocks.push(Int64DenseBlock{data : Vec::new()})
-//        }
+        for col in &self.columns {
+            match col.data_type {
+                BlockType::Int64Dense => blocks.push(Int64DenseBlock{data : Vec::new()}),
+                _ => println!("Not suppported"),
+            }
+
+        }
 
         Partition { blocks : blocks }
     }
