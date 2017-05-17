@@ -21,7 +21,7 @@ use scan::BlockScanConsumer;
 use scan::ScanComparison;
 
 static TEST_COLS_SPARSE_I64: i32 = 20;
-static TEST_ROWS_PER_PART: i32 = 1000000;
+static TEST_ROWS_PER_PART: i32 = 1000;
 
 fn fill_partition(part : &mut Partition) {
     let mut rng = rand::thread_rng();
@@ -80,7 +80,7 @@ fn main() {
     let scan_duration = Instant::now();
     let ref scanned_block = partition.blocks[4];
     let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
-    scanned_block.scan(&ScanComparison::LtEq, &(12345 as u64), &mut consumer);
+    scanned_block.scan(ScanComparison::LtEq, &(1363258435234989944 as u64), &mut consumer);
 
     println!("Scanning and matching {} elements took {:?}", consumer.matching_offsets.len(), scan_duration.elapsed());
 
