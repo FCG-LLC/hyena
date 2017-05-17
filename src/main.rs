@@ -11,41 +11,80 @@ pub mod int_blocks;
 use catalog::Catalog;
 use catalog::Column;
 use catalog::BlockType;
+
+use int_blocks::Block;
+use int_blocks::Scannable;
+
 use partition::Partition;
 
-static TEST_COLS_DENSE_I64: i32 = 20;
+use scan::BlockScanConsumer;
+use scan::ScanComparison;
+
+static TEST_COLS_SPARSE_I64: i32 = 20;
 static TEST_ROWS_PER_PART: i32 = 1000000;
 
 fn fill_partition(part : &mut Partition) {
     let mut rng = rand::thread_rng();
 
-    for x in 0..TEST_COLS_DENSE_I64 {
-        let mut col = &mut part.blocks[0];
-        col.append(rng.gen::<u64>());
+    let mut row_index = 0;
+
+    let mut pseudo_ts = 1495000000 as u64  * 1000000;
+    let ts_step = 100;
+
+    for x in 0..TEST_ROWS_PER_PART {
+        let mut col_index = 0;
+        for col in part.blocks.iter_mut() {
+            match col {
+                &mut Block::Int64Dense(ref mut b) => {
+                    match col_index {
+                        0 => b.append(pseudo_ts),     // ts
+                        1 => b.append(pseudo_ts % 3), // source
+                        _ => b.append(rng.gen::<u64>())
+                    }
+                },
+                &mut Block::Int64Sparse(ref mut b) => b.append(row_index, rng.gen::<u64>()),
+                &mut Block::Int32Sparse(ref mut b) => b.append(row_index, rng.gen::<u32>()),
+                _ => println!("Oopsie")
+            }
+
+            col_index += 1;
+        }
+
+        row_index += 1;
     }
 }
 
 fn main() {
-    let start = Instant::now();
+    let create_duration = Instant::now();
 
     let catalog : &mut Catalog = &mut Catalog { columns : Vec::new() };
 
-    for x in 0..TEST_COLS_DENSE_I64 {
-        catalog.add_column(BlockType::Int64Dense, format!("col_{}", x));
+
+    catalog.add_column(BlockType::Int64Dense, String::from("ts"));
+    catalog.add_column(BlockType::Int64Dense, String::from("source"));
+    for x in 0..TEST_COLS_SPARSE_I64 {
+        catalog.add_column(BlockType::Int64Sparse, format!("col_{}", x));
     }
 
     let mut partition : Partition = catalog.create_partition();
-    fill_partition(&mut partition);
-
 
     println!("Following columns are defined");
     for col in catalog.columns.iter_mut() {
         println!("Column: {} of type {:?}", col.name, col.data_type);
     }
 
-    let elapsed = start.elapsed();
-    println!("{:?}", elapsed);
-    println!("Elapsed: {} ms",
-             (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64);
+    fill_partition(&mut partition);
+
+    println!("Creating data took {:?}", create_duration.elapsed());
+
+    let scan_duration = Instant::now();
+    let ref scanned_block = partition.blocks[4];
+    let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
+    scanned_block.scan(&ScanComparison::LtEq, &(12345 as u64), &mut consumer);
+
+    println!("Scanning and matching {} elements took {:?}", consumer.matching_offsets.len(), scan_duration.elapsed());
+
+    //    println!("Elapsed: {} ms",
+//             (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64);
 
 }

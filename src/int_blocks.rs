@@ -1,13 +1,17 @@
 use scan::ScanComparison;
 use scan::BlockScanConsumer;
 
+
+// Sorry for this copypasta, it took me bit more time to make templates work and still had some issues, so consider this just a mock
+
 pub trait Scannable<T> {
     fn scan(&self, op : &ScanComparison, val : &T, scan_consumer : &mut BlockScanConsumer);
 }
 
 pub enum Block {
     Int64Dense(Int64DenseBlock),
-    Int64Sparse(Int64SparseBlock)
+    Int64Sparse(Int64SparseBlock),
+    Int32Sparse(Int32SparseBlock)
 }
 
 impl Scannable<u64> for Block {
@@ -23,6 +27,7 @@ impl Scannable<u64> for Block {
 impl Scannable<u32> for Block {
     fn scan(&self, op : &ScanComparison, val : &u32, scan_consumer : &mut BlockScanConsumer) {
         match self {
+            &Block::Int32Sparse(ref b) => b.scan(op, val, scan_consumer),
             _ => println!("Unrecognized u32 block type")
         }
     }
@@ -48,6 +53,16 @@ impl Int64SparseBlock {
     }
 }
 
+pub struct Int32SparseBlock {
+    pub data : Vec<(u32,u32)>
+}
+
+impl Int32SparseBlock {
+    pub fn append(&mut self, o: u32, v: u32) {
+        self.data.push((o, v));
+    }
+}
+
 impl Scannable<u64> for Int64DenseBlock {
     fn scan(&self, op : &ScanComparison, val : &u64, scan_consumer : &mut BlockScanConsumer) {
         for (offset_usize, value) in self.data.iter().enumerate() {
@@ -67,6 +82,22 @@ impl Scannable<u64> for Int64DenseBlock {
 
 impl Scannable<u64> for Int64SparseBlock {
     fn scan(&self, op : &ScanComparison, val : &u64, scan_consumer : &mut BlockScanConsumer) {
+        for &(offset, value_ref) in self.data.iter() {
+            let value = &value_ref;
+            match op {
+                Lt => if value < val { scan_consumer.matching_offsets.push(offset) },
+                LtEq => if value <= val { scan_consumer.matching_offsets.push(offset) },
+                Eq => if value == val { scan_consumer.matching_offsets.push(offset) },
+                GtEq => if value >= val { scan_consumer.matching_offsets.push(offset) },
+                Gt => if value > val { scan_consumer.matching_offsets.push(offset) },
+                NotEq => if value != val { scan_consumer.matching_offsets.push(offset) },
+            }
+        }
+    }
+}
+
+impl Scannable<u32> for Int32SparseBlock {
+    fn scan(&self, op : &ScanComparison, val : &u32, scan_consumer : &mut BlockScanConsumer) {
         for &(offset, value_ref) in self.data.iter() {
             let value = &value_ref;
             match op {
