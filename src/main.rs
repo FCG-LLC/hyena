@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate serde_derive;
+extern crate bincode;
+
 extern crate rand;
 use rand::Rng;
 use std::time::Instant;

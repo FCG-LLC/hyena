@@ -44,7 +44,7 @@ impl Catalog {
 
         }
 
-        Partition { blocks : blocks }
+        Partition { min_ts: 0, max_ts: 0, blocks : blocks }
     }
 }
 

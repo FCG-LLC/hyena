@@ -1,6 +1,7 @@
+use bincode::{serialize, deserialize, Infinite};
+
 use scan::ScanComparison;
 use scan::BlockScanConsumer;
-
 
 
 // Sorry for this copypasta, it took me bit more time to make templates work and still had some issues, so consider this just a mock
@@ -9,6 +10,7 @@ pub trait Scannable<T> {
     fn scan(&self, op : ScanComparison, val : &T, scan_consumer : &mut BlockScanConsumer);
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
 pub enum Block {
     Int64Dense(Int64DenseBlock),
     Int64Sparse(Int64SparseBlock),
@@ -18,7 +20,7 @@ pub enum Block {
 impl Scannable<u64> for Block {
     fn scan(&self, op : ScanComparison, val : &u64, scan_consumer : &mut BlockScanConsumer) {
         match self {
-            &Block::Int64Dense(ref b) => b.scan(op, val, scan_consumer),
+                &Block::Int64Dense(ref b) => b.scan(op, val, scan_consumer),
             &Block::Int64Sparse(ref b) => b.scan(op, val, scan_consumer),
             _ => panic!("Unrecognized u64 block type")
         }
@@ -34,6 +36,7 @@ impl Scannable<u32> for Block {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct Int64DenseBlock {
     pub data : Vec<u64>
 }
@@ -44,6 +47,7 @@ impl Int64DenseBlock {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct Int64SparseBlock {
     pub data : Vec<(u32,u64)>
 }
@@ -54,6 +58,7 @@ impl Int64SparseBlock {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct Int32SparseBlock {
     pub data : Vec<(u32,u32)>
 }
