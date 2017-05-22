@@ -5,7 +5,7 @@ use partition::Partition;
 use int_blocks::Block;
 
 #[repr(u8)]
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum BlockType {
     Int64Dense,
     Int64Sparse,

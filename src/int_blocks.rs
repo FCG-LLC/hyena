@@ -17,6 +17,28 @@ pub enum Block {
     Int32Sparse(Int32SparseBlock)
 }
 
+impl Block {
+    pub fn dump(&self, path:String) {
+        let mut encoded: Vec<u8>;
+
+        match self {
+            &Block::Int64Dense(ref b) => encoded = serialize(b, Infinite).unwrap(),
+            &Block::Int64Sparse(ref b) =>  encoded = serialize(b, Infinite).unwrap(),
+            &Block::Int32Sparse(ref b) => encoded = serialize(b, Infinite).unwrap()
+        }
+    }
+
+    pub fn load(&mut self, path:String) {
+//        let arr:Vec<u8>;
+//
+//        match &mut self {
+//            &Block::Int64Dense(ref mut b) => b.data = deserialize(&arr[..]).unwrap(),
+//            &Block::Int64Sparse(ref mut b) => b.data = deserialize(&arr[..]).unwrap(),
+//            &Block::Int32Sparse(ref mut b) => b.data = deserialize(&arr[..]).unwrap()
+//        }
+    }
+}
+
 impl Scannable<u64> for Block {
     fn scan(&self, op : ScanComparison, val : &u64, scan_consumer : &mut BlockScanConsumer) {
         match self {

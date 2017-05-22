@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 extern crate bincode;
+extern crate nanomsg;
 
 extern crate rand;
 use rand::Rng;
@@ -12,6 +13,7 @@ pub mod scan;
 pub mod partition;
 pub mod int_blocks;
 pub mod api;
+pub mod manager;
 pub mod nanomsg_endpoint;
 
 use catalog::Catalog;

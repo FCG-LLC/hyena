@@ -1,4 +1,3 @@
-
 use bincode::{serialize, deserialize, Infinite};
 
 use scan::ScanComparison;
@@ -29,9 +28,9 @@ impl Partition {
         }
     }
 
-    pub fn dump(&self, path:String) {
-        //let encoded: Vec<u8> = serialize(&blocks, Infinite).unwrap();
-    }
+//    pub fn dump(&self, path:String) {
+//        let encoded: Vec<u8> = serialize(&self.blocks, Infinite).unwrap();
+//    }
 }
 
 
