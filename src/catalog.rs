@@ -19,6 +19,13 @@ pub struct Column {
 }
 
 #[derive(Debug)]
+pub struct PartitionInfo {
+    pub min_ts: u64,
+    pub max_ts: u64,
+    pub location: String
+}
+
+#[derive(Debug)]
 pub struct Catalog {
     pub columns: Vec<Column>
 }

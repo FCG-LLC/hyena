@@ -11,6 +11,8 @@ pub mod catalog;
 pub mod scan;
 pub mod partition;
 pub mod int_blocks;
+pub mod api;
+pub mod nanomsg_endpoint;
 
 use catalog::Catalog;
 use catalog::Column;

@@ -20,7 +20,7 @@ pub enum Block {
 impl Scannable<u64> for Block {
     fn scan(&self, op : ScanComparison, val : &u64, scan_consumer : &mut BlockScanConsumer) {
         match self {
-                &Block::Int64Dense(ref b) => b.scan(op, val, scan_consumer),
+            &Block::Int64Dense(ref b) => b.scan(op, val, scan_consumer),
             &Block::Int64Sparse(ref b) => b.scan(op, val, scan_consumer),
             _ => panic!("Unrecognized u64 block type")
         }

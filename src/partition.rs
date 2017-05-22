@@ -6,6 +6,8 @@ use scan::BlockScanConsumer;
 use int_blocks::Block;
 use std::cmp;
 
+// @jacek - we might assume that Partition will be be owned by a single thread always
+
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct Partition {
     pub min_ts : u64,
