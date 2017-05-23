@@ -65,8 +65,9 @@ fn fill_partition(part : &mut Partition) {
 fn main() {
     let create_duration = Instant::now();
 
-    let catalog : &mut Catalog = &mut Catalog { columns : Vec::new() };
+    //let catalog : &mut Catalog = &mut Catalog { columns : Vec::new(), available_partitions: Vec::new(), current_partition: catalog::create_partition() };
 
+    let catalog : &mut Catalog = &mut Catalog::new();
 
     catalog.add_column(BlockType::Int64Dense, String::from("ts"));
     catalog.add_column(BlockType::Int64Dense, String::from("source"));

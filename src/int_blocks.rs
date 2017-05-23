@@ -10,7 +10,7 @@ pub trait Scannable<T> {
     fn scan(&self, op : ScanComparison, val : &T, scan_consumer : &mut BlockScanConsumer);
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum Block {
     Int64Dense(Int64DenseBlock),
     Int64Sparse(Int64SparseBlock),
@@ -18,6 +18,14 @@ pub enum Block {
 }
 
 impl Block {
+    pub fn len(&self) -> usize {
+        match self {
+            &Block::Int64Dense(ref b) => b.data.len(),
+            &Block::Int64Sparse(ref b) => b.data.len(),
+            &Block::Int32Sparse(ref b) => b.data.len()
+        }
+    }
+
     pub fn dump(&self, path:String) {
         let mut encoded: Vec<u8>;
 
@@ -58,7 +66,7 @@ impl Scannable<u32> for Block {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Int64DenseBlock {
     pub data : Vec<u64>
 }
@@ -69,7 +77,7 @@ impl Int64DenseBlock {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Int64SparseBlock {
     pub data : Vec<(u32,u64)>
 }
@@ -80,7 +88,7 @@ impl Int64SparseBlock {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Int32SparseBlock {
     pub data : Vec<(u32,u32)>
 }

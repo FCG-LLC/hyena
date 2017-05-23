@@ -7,7 +7,7 @@ use std::cmp;
 
 // @jacek - we might assume that Partition will be be owned by a single thread always
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Partition {
     pub min_ts : u64,
     pub max_ts : u64,
@@ -15,6 +15,10 @@ pub struct Partition {
 }
 
 impl Partition {
+    pub fn new() {
+        Partition { min_ts: 0, max_ts: 0, blocks: Vec::new() };
+    }
+
     pub fn prepare(&mut self) {
         let ts_block = &self.blocks[0];
         self.min_ts = u64::max_value();

@@ -7,22 +7,17 @@ pub struct InsertMessage {
     row_count : u32,
     col_count : u32,
     col_types : Vec<(u32, BlockType)>,
-    blocks : Vec<Block>
+    blocks : Vec<Block> // This can be done right now only because blocks are so trivial
 }
 
 pub fn insert_serialized_request(buf : &Vec<u8>) {
-
+    let msg : InsertMessage = deserialize(&buf[..]).unwrap();
+    assert_eq!(msg.col_count, 5);
 }
 
 #[test]
 fn it_works() {
     let mut test_msg:Vec<u8> = vec![];
-
-//    let row_count:u32 = 3;
-//    test_msg.extend(serialize(&row_count, Infinite).unwrap());
-//
-//    let col_count:u32 = 4;
-//    test_msg.extend(serialize(&col_count, Infinite).unwrap());
 
     let base_ts = 1495490000 * 1000000;
 
@@ -48,10 +43,9 @@ fn it_works() {
     
     test_msg.extend(serialize(&insert_msg, Infinite).unwrap());
 
-
-    // table index +
-
     println!("In test {:?}", test_msg);
-//    assert!(false);
+    insert_serialized_request(&test_msg);
+
+
 }
 
