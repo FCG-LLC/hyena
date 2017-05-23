@@ -2,6 +2,7 @@ use bincode::{serialize, deserialize, Infinite};
 
 use scan::ScanComparison;
 use scan::BlockScanConsumer;
+use catalog::BlockType;
 
 
 // Sorry for this copypasta, it took me bit more time to make templates work and still had some issues, so consider this just a mock
@@ -18,6 +19,16 @@ pub enum Block {
 }
 
 impl Block {
+    pub fn create_block(block_type : &BlockType) -> Block {
+        match block_type {
+            &BlockType::Int64Dense => Block::Int64Dense(Int64DenseBlock{data : Vec::new()}),
+            &BlockType::Int64Sparse => Block::Int64Sparse(Int64SparseBlock{data : Vec::new()}),
+            &BlockType::Int32Sparse => Block::Int32Sparse(Int32SparseBlock{data : Vec::new()}),
+            _ => panic!("Not supported"),
+
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             &Block::Int64Dense(ref b) => b.data.len(),

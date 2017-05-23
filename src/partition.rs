@@ -15,8 +15,8 @@ pub struct Partition {
 }
 
 impl Partition {
-    pub fn new() {
-        Partition { min_ts: 0, max_ts: 0, blocks: Vec::new() };
+    pub fn new() -> Partition {
+        Partition { min_ts: 0, max_ts: 0, blocks: Vec::new() }
     }
 
     pub fn prepare(&mut self) {

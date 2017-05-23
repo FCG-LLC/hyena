@@ -1,6 +1,7 @@
 use catalog::Catalog;
 use catalog::BlockType;
 use partition::Partition;
+use int_blocks::Block;
 
 use bincode::{serialize, deserialize, Infinite};
 use std::fs;
@@ -22,8 +23,8 @@ impl Manager {
     }
 
     pub fn add_column(&mut self, data_type: BlockType, name: String) {
-        self.catalog.add_column(data_type, name);
-        push_block(&new_col, &mut self.current_partition.blocks);
+        let col = self.catalog.add_column(data_type, name);
+        self.current_partition.blocks.push(Block::create_block(&col.data_type));
     }
 
     pub fn get_in_memory_partition(&mut self) -> &mut Partition {
@@ -47,8 +48,7 @@ impl Manager {
         let mut buf: Vec<u8> = Vec::new();
         buf_reader.read_to_end(&mut buf).unwrap();
 
-        println!("Got {} bytes", buf.len());
-        let cat:Catalog = deserialize(&buf[..]).unwrap();
+        self.catalog = deserialize(&buf[..]).unwrap();
 
     }
 
@@ -59,11 +59,6 @@ impl Manager {
 
         let bytes:Vec<u8> = serialize(&self.catalog, Infinite).unwrap();
         file.write_all(&bytes).unwrap();
-
-        println!("Catalog is {} bytes", bytes.len());
-        let cc:Catalog = deserialize(&bytes).unwrap();
-        println!("HMMM");
-
 
 //        file.sync_all().unwrap();
     }
@@ -83,5 +78,5 @@ fn it_saves_and_loads_data() {
     let manager2 = &mut Manager::new(String::from("/tmp/hyena"));
     manager2.reload_catalog();
 
-//    assert_eq!(manager2.catalog, manager.catalog);
+    assert_eq!(manager2.catalog, manager.catalog);
 }
