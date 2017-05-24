@@ -2,6 +2,7 @@ use catalog::Catalog;
 use catalog::BlockType;
 use partition::Partition;
 use int_blocks::Block;
+use api::InsertMessage;
 
 use bincode::{serialize, deserialize, Infinite};
 use std::fs;
@@ -49,7 +50,6 @@ impl Manager {
         buf_reader.read_to_end(&mut buf).unwrap();
 
         self.catalog = deserialize(&buf[..]).unwrap();
-
     }
 
     pub fn store_catalog(&self) {
@@ -62,11 +62,24 @@ impl Manager {
 
 //        file.sync_all().unwrap();
     }
+
+    pub fn insert(&mut self, msg : &InsertMessage) {
+        // TODO: validate columns - their types and if they exist
+
+        let current_offset = self.current_partition.blocks[0].len();
+
+        for col_no in 0..col_count {
+            let catalog_col_no = col_types[col_no].1;
+
+            for row_no in 0..row_count {
+//                self.current_partitionc
+            }
+        }
+    }
 }
 
-#[test]
-fn it_saves_and_loads_data() {
-    let manager = &mut Manager::new(String::from("/tmp/hyena"));
+fn create_catalog<'a>() -> Manager {
+    let mut manager = Manager::new(String::from("/tmp/hyena"));
 
     manager.catalog.add_column(BlockType::Int64Dense, String::from("ts"));
     manager.catalog.add_column(BlockType::Int64Dense, String::from("source"));
@@ -75,8 +88,17 @@ fn it_saves_and_loads_data() {
 
     manager.store_catalog();
 
+    manager
+}
+
+#[test]
+fn it_saves_and_loads_data() {
+    let manager = create_catalog();
+    
     let manager2 = &mut Manager::new(String::from("/tmp/hyena"));
     manager2.reload_catalog();
 
     assert_eq!(manager2.catalog, manager.catalog);
 }
+
+fn it_
