@@ -1,18 +1,28 @@
 use bincode::{serialize, deserialize, Infinite};
 use catalog::BlockType;
+use manager::Manager;
 use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock};
 
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct InsertMessage {
-    row_count : u32,
-    col_count : u32,
-    col_types : Vec<(u32, BlockType)>,
-    blocks : Vec<Block> // This can be done right now only because blocks are so trivial
+    pub row_count : u32,
+    pub col_count : u32,
+    pub col_types : Vec<(u32, BlockType)>,
+    pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
 }
 
-pub fn insert_serialized_request(buf : &Vec<u8>) {
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct ScanResultMessage {
+    pub row_count : u32,
+    pub col_count : u32,
+    pub col_types : Vec<(u32, BlockType)>,
+    pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
+}
+
+pub fn insert_serialized_request(manager: &mut Manager, buf : &Vec<u8>) {
     let msg : InsertMessage = deserialize(&buf[..]).unwrap();
-    assert_eq!(msg.col_count, 5);
+
+    manager.insert(&msg);
 }
 
 #[test]
@@ -44,7 +54,7 @@ fn it_works() {
     test_msg.extend(serialize(&insert_msg, Infinite).unwrap());
 
     println!("In test {:?}", test_msg);
-    insert_serialized_request(&test_msg);
+//    insert_serialized_request(&test_msg);
 
 
 }

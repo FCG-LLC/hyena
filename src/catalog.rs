@@ -55,7 +55,9 @@ impl Catalog {
             blocks.push(Block::create_block(&col.data_type));
         }
 
-        Partition { min_ts: 0, max_ts: 0, blocks : blocks }
+        let mut partition = Partition::new();
+        partition.blocks = blocks;
+        partition
     }
 
 }
