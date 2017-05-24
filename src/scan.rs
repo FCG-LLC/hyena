@@ -1,4 +1,4 @@
-use partition::Partition;
+use catalog::PartitionInfo;
 use api::ScanResultMessage;
 use catalog::Catalog;
 use manager::Manager;
@@ -25,7 +25,11 @@ pub struct BlockScanConsumer {
 
 
 impl BlockScanConsumer {
-    pub fn materialize(&self, manager : &Manager, catalog : &Catalog, part : &Partition, projection : &Vec<u32>, msg : &mut ScanResultMessage) {
+    pub fn merge_scans(&mut self, other_scans : &Vec<BlockScanConsumer>) {
+        // TODO
+    }
+    
+    pub fn materialize(&self, manager : &Manager, catalog : &Catalog, part_info : &PartitionInfo, projection : &Vec<u32>, msg : &mut ScanResultMessage) {
         // This should work only on empty message (different implementation is of course possible,
         // if you think it would make sense to merge results)
         assert_eq!(msg.row_count, 0);
@@ -33,13 +37,14 @@ impl BlockScanConsumer {
         msg.row_count = self.matching_offsets.len() as u32;
         msg.col_count = projection.len() as u32;
 
-        for col in projection {
-            let col_index = *col;
-            let column = &catalog.columns[col_index as usize];
-            msg.col_types.push((col_index, column.data_type.to_owned()));
+        for col_index in projection {
+//            let col_index = *col;
+            let column = &catalog.columns[*col_index as usize];
+            msg.col_types.push((*col_index, column.data_type.to_owned()));
+
 
             // Fetch block from disk
-            
+            let block = manager.load_block(part_info, *col_index);
 
         }
     }
