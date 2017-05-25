@@ -138,7 +138,7 @@ impl BlockScanConsumer {
         BlockScanConsumer { matching_offsets: new_matching_offsets }
     }
 
-    pub fn materialize(&self, manager : &Manager, catalog : &Catalog, part_info : &PartitionInfo, projection : &Vec<u32>, msg : &mut ScanResultMessage) {
+    pub fn materialize(&self, manager : &Manager, part_info : &PartitionInfo, projection : &Vec<u32>, msg : &mut ScanResultMessage) {
         // This should work only on empty message (different implementation is of course possible,
         // if you think it would make sense to merge results)
         assert_eq!(msg.row_count, 0);
@@ -147,7 +147,7 @@ impl BlockScanConsumer {
         msg.col_count = projection.len() as u32;
 
         for col_index in projection {
-            let column = &catalog.columns[*col_index as usize];
+            let column = &manager.catalog.columns[*col_index as usize];
             msg.col_types.push((*col_index, column.data_type.to_owned()));
 
             // Fetch block from disk

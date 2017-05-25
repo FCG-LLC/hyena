@@ -31,6 +31,7 @@ use partition::Partition;
 
 use scan::BlockScanConsumer;
 use scan::ScanComparison;
+use api::ScanResultMessage;
 
 use api::InsertMessage;
 
@@ -129,7 +130,7 @@ fn main() {
 
     let mut cur_ts : u64 = 149500000;
 
-    for iter in 0..100 {
+    for iter in 0..50 {
         let msg = create_message(cur_ts + iter*17);
         total_count += msg.row_count as usize;
         manager.insert(&msg);
@@ -140,6 +141,22 @@ fn main() {
     println!("Creating {} records took {:?}", total_count, create_duration.elapsed());
 
     let scan_duration = Instant::now();
+
+    let mut total_matched = 0;
+    let mut total_materialized = 0;
+
+    for part_info in &manager.catalog.available_partitions {
+        let scanned_block = manager.load_block(&part_info, 7);
+        let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
+        scanned_block.scan(ScanComparison::LtEq, &(1363258435234989944 as u64), &mut consumer);
+
+        let mut scan_msg = ScanResultMessage::new();
+        consumer.materialize(&manager, part_info, &vec![0,1,3,4,5], &mut scan_msg);
+
+        total_materialized += scan_msg.row_count;
+        total_matched += consumer.matching_offsets.len();
+    }
+    println!("Scanning and matching/materializing {}/{} elements took {:?}", total_matched, total_materialized, scan_duration.elapsed());
 //    let ref scanned_block = partition.blocks[4];
 //    let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
 //    scanned_block.scan(ScanComparison::LtEq, &(1363258435234989944 as u64), &mut consumer);

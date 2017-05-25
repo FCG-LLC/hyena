@@ -19,6 +19,17 @@ pub struct ScanResultMessage {
     pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
 }
 
+impl ScanResultMessage {
+    pub fn new() -> ScanResultMessage {
+        ScanResultMessage {
+            row_count: 0,
+            col_count: 0,
+            col_types: Vec::new(),
+            blocks: Vec::new()
+        }
+    }
+}
+
 pub fn insert_serialized_request(manager: &mut Manager, buf : &Vec<u8>) {
     let msg : InsertMessage = deserialize(&buf[..]).unwrap();
 
