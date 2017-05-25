@@ -58,6 +58,8 @@ impl Manager {
     pub fn insert(&mut self, msg : &InsertMessage) {
         // TODO: validate columns - their types and if they exist
 
+        // TODO: for sparse sets we could add assertion that order of offsets is monotonically growing
+
         ensure_partition_is_current(&self.catalog, &mut self.current_partition);
 
         let current_offset = self.current_partition.blocks[0].len();
