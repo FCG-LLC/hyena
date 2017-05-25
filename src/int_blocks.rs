@@ -37,32 +37,29 @@ impl Block {
         }
     }
 
-//    fn consume(&self, scan_consumer : &BlockScanConsumer) -> Block {
-//        let output_block:Block;
-//
-//        match self {
-//            &Block::Int64Dense(ref b) => {
-//                let mut block = Int64DenseBlock::new();
-//
-//                for index in scan_consumer.matching_offsets {
-//                    block.data.push(b.data[index as usize]);
-//                }
-//                output_block = Block::create_block_with_data(BlockType::Int64Dense, data);
-//            },
-//            &Block::Int64Sparse(ref b) => {
-//                let data : Vec<(u32, u64)> = Vec::new();
-//                // TODO: binary search-like operations would be faster usually (binary-search + scans)
-////                for (offset, value) in scan_consumer.matching_offsets {
-////
-////                }
-////                output_block = Block::create_block_with_data(BlockType::Int64Sparse, data);
-//
-//            },
-//            _ => panic!("Unrecognized u64 block type")
-//        }
-//
-//        output_block
-//    }
+    pub fn consume(&self, scan_consumer : &BlockScanConsumer) -> Block {
+        let output_block:Block;
+
+        match self {
+            &Block::Int64Dense(ref b) => {
+                let mut block = Int64DenseBlock::new();
+
+                for index in &scan_consumer.matching_offsets {
+                    block.data.push(b.data[*index as usize]);
+                }
+                output_block = Block::Int64Dense(block);
+            },
+            &Block::Int64Sparse(ref b) => {
+                output_block = Block::Int64Sparse(b.filter_scan_results(scan_consumer));
+            },
+            &Block::Int32Sparse(ref b) => {
+                output_block = Block::Int32Sparse(b.filter_scan_results(scan_consumer));
+            },
+            _ => panic!("Unrecognized u64 block type")
+        }
+
+        output_block
+    }
 
 }
 
