@@ -56,6 +56,8 @@ impl Manager {
     }
 
     pub fn insert(&mut self, msg : &InsertMessage) {
+        println!("Inserting message of {} records", msg.row_count);
+
         // TODO: validate columns - their types and if they exist
 
         // TODO: for sparse sets we could add assertion that order of offsets is monotonically growing
@@ -63,7 +65,6 @@ impl Manager {
         ensure_partition_is_current(&self.catalog, &mut self.current_partition);
 
         let current_offset = self.current_partition.blocks[0].len();
-
 
         for col_no in 0..msg.col_count {
             let catalog_col_no = msg.col_types[col_no as usize].0;
@@ -107,7 +108,7 @@ impl Manager {
            }
         }
 
-        if self.current_partition.blocks[0].len() > 1000000 {
+        if self.current_partition.blocks[0].len() > 100000 {
             self.dump_in_mem_partition();
         }
     }
@@ -178,6 +179,12 @@ impl Manager {
 //    }
 
     pub fn dump_in_mem_partition(&mut self) {
+        if self.current_partition.blocks.is_empty() {
+            println!("Cannot dump empty partition");
+            return
+        }
+
+        println!("Dumping in memory partition having {} records", self.current_partition.blocks[0].len());
         self.current_partition.prepare();
         let stored_path = self.store_partition(&self.current_partition);
         self.catalog.available_partitions.push(PartitionInfo {
