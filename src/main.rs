@@ -17,6 +17,8 @@ pub mod api;
 pub mod manager;
 pub mod nanomsg_endpoint;
 
+use nanomsg_endpoint::start_endpoint;
+
 use catalog::Catalog;
 use catalog::Column;
 use catalog::BlockType;
@@ -29,9 +31,8 @@ use int_blocks::Int32SparseBlock;
 
 use partition::Partition;
 
-use scan::BlockScanConsumer;
-use scan::ScanComparison;
-use api::ScanResultMessage;
+use scan::{BlockScanConsumer};
+use api::{ScanResultMessage, ScanComparison};
 
 use api::InsertMessage;
 
@@ -77,29 +78,6 @@ fn create_message(ts_base : u64) -> InsertMessage {
         col_types.push((col_no, block_type));
     }
 
-//
-//    for x in 0..TEST_ROWS_PER_PACKAGE {
-//        let mut col_index = 0;
-//        for col in part.blocks.iter_mut() {
-//            match col {
-//                &mut Block::Int64Dense(ref mut b) => {
-//                    match col_index {
-//                        0 => b.append(pseudo_ts),     // ts
-//                        1 => b.append(pseudo_ts % 3), // source
-//                        _ => b.append(rng.gen::<u64>())
-//                    }
-//                },
-//                &mut Block::Int64Sparse(ref mut b) => b.append(row_index, rng.gen::<u64>()),
-//                &mut Block::Int32Sparse(ref mut b) => b.append(row_index, rng.gen::<u32>()),
-//                _ => println!("Oopsie")
-//            }
-//
-//            col_index += 1;
-//        }
-//
-//        row_index += 1;
-//    }
-
 
     InsertMessage {
         row_count: TEST_ROWS_PER_PACKAGE,
@@ -111,6 +89,9 @@ fn create_message(ts_base : u64) -> InsertMessage {
 }
 
 fn main() {
+
+    start_endpoint();
+
     let create_duration = Instant::now();
 
     let mut total_count : usize = 0;

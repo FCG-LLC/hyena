@@ -19,6 +19,52 @@ pub struct ScanResultMessage {
     pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ScanComparison {
+    Lt,
+    LtEq,
+    Eq,
+    GtEq,
+    Gt,
+    NotEq
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ScanFilter {
+    pub op : ScanComparison,
+    pub val : u64
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct ScanRequest {
+    pub min_ts : u64,
+    pub max_ts : u64,
+    pub projection : Vec<u32>,
+    pub filters : Vec<ScanFilter>
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub enum ApiOperation {
+    Insert,
+    Scan
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct ApiMessage {
+    pub op_type : ApiOperation,
+    pub payload : Vec<u8>
+}
+
+impl ApiMessage {
+    pub fn extract_scan_request(&self) -> ScanRequest {
+        assert_eq!(self.op_type, ApiOperation::Scan);
+
+        let scan_request = deserialize(&self.payload[..]).unwrap();
+        scan_request
+    }
+}
+
+
 impl ScanResultMessage {
     pub fn new() -> ScanResultMessage {
         ScanResultMessage {
@@ -66,7 +112,33 @@ fn it_works() {
 
     println!("In test {:?}", test_msg);
 //    insert_serialized_request(&test_msg);
-
-
 }
 
+#[test]
+fn api_message_serialization() {
+    let scan_req = ScanRequest {
+        min_ts: 100 as u64,
+        max_ts: 200 as u64,
+        filters: vec![
+            ScanFilter {
+                op: ScanComparison::GtEq,
+                val: 1000 as u64
+            }
+        ],
+        projection: vec![0,1,2,3]
+    };
+
+    let api_msg = ApiMessage {
+        op_type: ApiOperation::Scan,
+        payload: serialize(&scan_req, Infinite).unwrap()
+    };
+
+    let serialized_msg = serialize(&api_msg, Infinite).unwrap();
+
+    println!("Filter #1: {:?}", serialize(&scan_req.filters[0], Infinite).unwrap());
+    println!("Filters: {:?}", serialize(&scan_req.filters, Infinite).unwrap());
+    println!("Projection: {:?}", serialize(&scan_req.projection, Infinite).unwrap());
+    println!("Scan request: {:?}", serialize(&scan_req, Infinite).unwrap());
+    println!("Payload length: {}", api_msg.payload.len());
+    println!("Serialized api message for scan: {:?}", serialized_msg);
+}

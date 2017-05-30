@@ -1,15 +1,32 @@
+use bincode::{serialize, deserialize, Infinite};
+
 use nanomsg::{Socket, Protocol, Error};
-
-fn create_socket() -> Result<(), Error> {
-//    let mut socket = try!(Socket::new(Protocol::));
-//
-//    // Create a new endpoint bound to the following protocol string. This returns
-//    // a new `Endpoint` that lives at-most the lifetime of the original socket.
-//    let mut endpoint = try!(socket.bind("ipc:///tmp/pipeline.ipc"));
-
-    Ok(())
-}
+use api::{ApiMessage, ApiOperation};
+use std::io::{Read, Write};
 
 pub fn start_endpoint() {
-    println!("Hooray")
+    //let mut socket = try!(Socket::new(Protocol::Rep));
+    //let mut endpoint = try!(socket.bind("ipc:///tmp/hyena.ipc"));
+
+    let mut socket = Socket::new(Protocol::Rep).unwrap();
+    let mut endpoint = socket.bind("ipc:///tmp/hyena.ipc").unwrap();
+
+    while true {
+        println!("Waiting for message");
+
+        let mut buf: Vec<u8> = Vec::new();
+        socket.read_to_end(&mut buf).unwrap();
+
+        println!("Received buffer: {:?}", buf);
+
+        let req : ApiMessage = deserialize(&buf[..]).unwrap();
+
+        println!("Deserialized as: {:?}", req.extract_scan_request());
+
+        match req.op_type {
+            ApiOperation::Scan => println!("Scan"),
+            ApiOperation::Insert => println!("Insert"),
+            _ => println!("Not scan")
+        }
+    }
 }

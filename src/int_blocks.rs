@@ -1,6 +1,6 @@
 use bincode::{serialize, deserialize, Infinite};
 
-use scan::ScanComparison;
+use api::ScanComparison;
 use scan::BlockScanConsumer;
 use catalog::BlockType;
 

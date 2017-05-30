@@ -1,23 +1,9 @@
 use catalog::PartitionInfo;
-use api::ScanResultMessage;
+use api::{ScanResultMessage, ScanFilter, ScanComparison};
 use catalog::Catalog;
 use manager::Manager;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum ScanComparison {
-    Lt,
-    LtEq,
-    Eq,
-    GtEq,
-    Gt,
-    NotEq
-}
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ScanFilter {
-    pub op : ScanComparison,
-    pub val : u64
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct BlockScanConsumer {

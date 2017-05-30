@@ -1,7 +1,6 @@
-use bincode::{serialize, deserialize, Infinite};
-
-use scan::ScanComparison;
 use scan::BlockScanConsumer;
+use api::ScanComparison;
+use bincode::{serialize, deserialize, Infinite};
 use int_blocks::Block;
 use std::cmp;
 
