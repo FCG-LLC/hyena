@@ -12,13 +12,12 @@ pub struct BlockScanConsumer {
 
 
 impl BlockScanConsumer {
-    pub fn merge_or_scans(&self, other_scans : &Vec<BlockScanConsumer>) -> BlockScanConsumer {
+    pub fn merge_or_scans(scans : &Vec<BlockScanConsumer>) -> BlockScanConsumer {
         let mut new_matching_offsets : Vec<u32> = Vec::new();
 
         let mut offset_sets:Vec<&Vec<u32>> = Vec::new();
 
-        offset_sets.push(&self.matching_offsets);
-        for scan in other_scans {
+        for scan in scans {
             offset_sets.push(&scan.matching_offsets);
         }
 
@@ -72,13 +71,12 @@ impl BlockScanConsumer {
         BlockScanConsumer { matching_offsets: new_matching_offsets }
     }
 
-    pub fn merge_and_scans(&self, other_scans : &Vec<BlockScanConsumer>) -> BlockScanConsumer {
+    pub fn merge_and_scans(scans : &Vec<BlockScanConsumer>) -> BlockScanConsumer {
         let mut new_matching_offsets : Vec<u32> = Vec::new();
 
         let mut offset_sets:Vec<&Vec<u32>> = Vec::new();
 
-        offset_sets.push(&self.matching_offsets);
-        for scan in other_scans {
+        for scan in scans {
             offset_sets.push(&scan.matching_offsets);
         }
 
@@ -147,11 +145,10 @@ impl BlockScanConsumer {
 
 #[test]
 fn it_merges_consumers() {
-    let consumer1 = BlockScanConsumer {
-        matching_offsets: vec![101,102,103,510,512,514]
-    };
-
-    let other_consumers = vec![
+    let consumers = vec![
+        BlockScanConsumer {
+            matching_offsets: vec![101,102,103,510,512,514]
+        },
         BlockScanConsumer{
             matching_offsets: vec![0,1,101,514,515]
         },
@@ -167,17 +164,20 @@ fn it_merges_consumers() {
         BlockScanConsumer{
             matching_offsets: vec![0,1,101,102,103,510,512,513,514,515]
         },
-        consumer1.merge_or_scans(&other_consumers)
+        BlockScanConsumer::merge_or_scans(&consumers)
     );
 
     assert_eq!(
         BlockScanConsumer{
             matching_offsets: vec![]
         },
-        consumer1.merge_and_scans(&other_consumers)
+        BlockScanConsumer::merge_and_scans(&consumers)
     );
 
-    let other_consumers2 = vec![
+    let consumers2 = vec![
+        BlockScanConsumer {
+            matching_offsets: vec![101,102,103,510,512,514]
+        },
         BlockScanConsumer{
             matching_offsets: vec![0,1,101,102,514,515]
         },
@@ -190,7 +190,7 @@ fn it_merges_consumers() {
         BlockScanConsumer{
             matching_offsets: vec![101,102,514]
         },
-        consumer1.merge_and_scans(&other_consumers2)
+        BlockScanConsumer::merge_and_scans(&consumers2)
     );
 
 }

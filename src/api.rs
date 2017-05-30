@@ -1,7 +1,9 @@
 use bincode::{serialize, deserialize, Infinite};
 use catalog::BlockType;
 use manager::Manager;
-use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock};
+use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable};
+use std::time::Instant;
+use scan::{BlockScanConsumer};
 
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct InsertMessage {
@@ -31,6 +33,7 @@ pub enum ScanComparison {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ScanFilter {
+    pub column : u32,
     pub op : ScanComparison,
     pub val : u64
 }
@@ -82,6 +85,46 @@ pub fn insert_serialized_request(manager: &mut Manager, buf : &Vec<u8>) {
     manager.insert(&msg);
 }
 
+pub fn scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
+    let scan_duration = Instant::now();
+
+    let mut total_matched = 0;
+    let mut total_materialized = 0;
+
+    let mut scan_msg = ScanResultMessage::new();
+
+    // FIXME: each scan message should go for separate partition
+    for part_info in &manager.catalog.available_partitions {
+
+        // FIXME: timestamp
+        // FIXME: no filters
+        // And how to do it?
+//        let consumers = req.filters.iter().map( |filter| {
+//            let scanned_block = manager.load_block(&part_info, filter.column);
+//            let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
+//            scanned_block.scan(filter.op, &filter.val, &mut consumer);
+//        });
+
+        let mut consumers:Vec<BlockScanConsumer> = Vec::new();
+        for filter in &req.filters {
+            let scanned_block = manager.load_block(&part_info, filter.column);
+            let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
+            scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
+            consumers.push(consumer);
+        }
+
+
+        let combined_consumer = BlockScanConsumer::merge_and_scans(&consumers);
+        combined_consumer.materialize(&manager, part_info, &req.projection, &mut scan_msg);
+
+        total_materialized += scan_msg.row_count;
+        total_matched += combined_consumer.matching_offsets.len();
+    }
+    println!("Scanning and matching/materializing {}/{} elements took {:?}", total_matched, total_materialized, scan_duration.elapsed());
+
+    scan_msg
+}
+
 #[test]
 fn it_works() {
     let mut test_msg:Vec<u8> = vec![];
@@ -121,6 +164,7 @@ fn api_message_serialization() {
         max_ts: 200 as u64,
         filters: vec![
             ScanFilter {
+                column: 5,
                 op: ScanComparison::GtEq,
                 val: 1000 as u64
             }

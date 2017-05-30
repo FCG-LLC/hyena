@@ -88,16 +88,7 @@ fn create_message(ts_base : u64) -> InsertMessage {
 
 }
 
-fn main() {
-
-    start_endpoint();
-
-    let create_duration = Instant::now();
-
-    let mut total_count : usize = 0;
-
-    let mut manager = Manager::new(String::from("/tmp/hyena"));
-
+fn prepare_catalog(manager : &mut Manager) {
     manager.catalog.add_column(BlockType::Int64Dense, String::from("ts"));
     manager.catalog.add_column(BlockType::Int64Dense, String::from("source"));
     for x in 0..TEST_COLS_SPARSE_I64 {
@@ -108,8 +99,14 @@ fn main() {
     for col in manager.catalog.columns.iter_mut() {
         println!("Column: {} of type {:?}", col.name, col.data_type);
     }
+}
+
+fn prepare_fake_data(manager : &mut Manager) {
+    let create_duration = Instant::now();
 
     let mut cur_ts : u64 = 149500000;
+
+    let mut total_count : usize = 0;
 
     for iter in 0..50 {
         let msg = create_message(cur_ts + iter*17);
@@ -120,6 +117,9 @@ fn main() {
     manager.dump_in_mem_partition();
 
     println!("Creating {} records took {:?}", total_count, create_duration.elapsed());
+}
+
+fn prepare_demo_scan(manager : &mut Manager) {
 
     let scan_duration = Instant::now();
 
@@ -138,6 +138,19 @@ fn main() {
         total_matched += consumer.matching_offsets.len();
     }
     println!("Scanning and matching/materializing {}/{} elements took {:?}", total_matched, total_materialized, scan_duration.elapsed());
+}
+
+fn main() {
+
+    let mut manager = Manager::new(String::from("/tmp/hyena"));
+
+    prepare_catalog(&mut manager);
+//    prepare_fake_data(&mut manager);
+//    prepare_demo_scan(&mut manager);
+
+    start_endpoint(&mut manager);
+
+
 //    let ref scanned_block = partition.blocks[4];
 //    let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
 //    scanned_block.scan(ScanComparison::LtEq, &(1363258435234989944 as u64), &mut consumer);

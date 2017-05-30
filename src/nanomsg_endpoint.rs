@@ -1,13 +1,13 @@
 use bincode::{serialize, deserialize, Infinite};
 
 use nanomsg::{Socket, Protocol, Error};
-use api::{ApiMessage, ApiOperation};
+
+use api::{ApiMessage, ApiOperation, scan_and_materialize};
+use manager::Manager;
+
 use std::io::{Read, Write};
 
-pub fn start_endpoint() {
-    //let mut socket = try!(Socket::new(Protocol::Rep));
-    //let mut endpoint = try!(socket.bind("ipc:///tmp/hyena.ipc"));
-
+pub fn start_endpoint(manager : &mut Manager) {
     let mut socket = Socket::new(Protocol::Rep).unwrap();
     let mut endpoint = socket.bind("ipc:///tmp/hyena.ipc").unwrap();
 
@@ -21,10 +21,14 @@ pub fn start_endpoint() {
 
         let req : ApiMessage = deserialize(&buf[..]).unwrap();
 
-        println!("Deserialized as: {:?}", req.extract_scan_request());
-
         match req.op_type {
-            ApiOperation::Scan => println!("Scan"),
+            ApiOperation::Scan => {
+                println!("Scan request: {:?}", req.extract_scan_request());
+
+                let materialized_msg = scan_and_materialize(manager, &req.extract_scan_request());
+
+
+            },
             ApiOperation::Insert => println!("Insert"),
             _ => println!("Not scan")
         }
