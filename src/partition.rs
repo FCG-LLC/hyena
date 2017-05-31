@@ -3,6 +3,8 @@ use api::ScanComparison;
 use bincode::{serialize, deserialize, Infinite};
 use int_blocks::Block;
 use std::cmp;
+use rand::Rng;
+use rand;
 
 // @jacek - we might assume that Partition will be be owned by a single thread always
 
@@ -10,6 +12,7 @@ use std::cmp;
 pub struct PartitionMetadata {
     pub min_ts : u64,
     pub max_ts : u64,
+    pub id : u64,
     pub existing_blocks: Vec<u32>
 }
 
@@ -26,15 +29,28 @@ impl Partition {
             metadata: PartitionMetadata {
                 min_ts: 0,
                 max_ts: 0,
+                id: 0,
                 existing_blocks: Vec::new()
             },
             blocks: Vec::new()
         }
     }
 
+    pub fn create_partition_id(part : &PartitionMetadata) -> u64 {
+        if part.id != 0 {
+            // already set...
+            return part.id;
+        }
+        let mut rng = rand::thread_rng();
+        rng.gen::<u64>()
+    }
+
+
     pub fn prepare(&mut self) {
         if self.blocks.len() == 0 { panic!("Seems this partition does not havy any blocks") };
-        
+
+        self.metadata.id = Partition::create_partition_id(&self.metadata);
+
         let ts_block = &self.blocks[0];
         self.metadata.min_ts = u64::max_value();
 
@@ -54,10 +70,6 @@ impl Partition {
             }
         }
     }
-
-//    pub fn dump(&self, path:String) {
-//        let encoded: Vec<u8> = serialize(&self.blocks, Infinite).unwrap();
-//    }
 }
 
 

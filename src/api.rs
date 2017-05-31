@@ -1,5 +1,5 @@
 use bincode::{serialize, deserialize, Infinite};
-use catalog::BlockType;
+use catalog::{BlockType, Column, PartitionInfo};
 use manager::Manager;
 use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable};
 use std::time::Instant;
@@ -42,14 +42,22 @@ pub struct ScanFilter {
 pub struct ScanRequest {
     pub min_ts : u64,
     pub max_ts : u64,
+    pub partition_id : u64,
     pub projection : Vec<u32>,
     pub filters : Vec<ScanFilter>
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct RefreshCatalogResponse {
+    pub columns: Vec<Column>,
+    pub available_partitions: Vec<PartitionInfo>
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum ApiOperation {
     Insert,
-    Scan
+    Scan,
+    RefreshCatalog
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -67,7 +75,6 @@ impl ApiMessage {
     }
 }
 
-
 impl ScanResultMessage {
     pub fn new() -> ScanResultMessage {
         ScanResultMessage {
@@ -79,13 +86,71 @@ impl ScanResultMessage {
     }
 }
 
+impl RefreshCatalogResponse {
+    pub fn new(manager: &Manager) -> RefreshCatalogResponse {
+        RefreshCatalogResponse {
+            columns: manager.catalog.columns.to_owned(),
+            available_partitions: manager.catalog.available_partitions.to_owned()
+        }
+    }
+}
+
 pub fn insert_serialized_request(manager: &mut Manager, buf : &Vec<u8>) {
     let msg : InsertMessage = deserialize(&buf[..]).unwrap();
 
     manager.insert(&msg);
 }
 
-pub fn scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
+// FIXME: this is ugly copypasta
+
+pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
+    let scan_duration = Instant::now();
+
+    let mut total_matched = 0;
+    let mut total_materialized = 0;
+
+    let mut scan_msg = ScanResultMessage::new();
+
+    let part_info = &manager.find_partition_info(req.partition_id);
+
+    let mut consumers:Vec<BlockScanConsumer> = Vec::new();
+
+    if req.filters.is_empty() {
+        let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
+        let scanned_block = manager.load_block(&part_info, 0); // ts
+        match scanned_block {
+            Block::Int64Dense(ref x) => {
+                for i in 0..x.data.len() {
+                    consumer.matching_offsets.push(i as u32);
+                }
+            },
+            _ => println!("This is unexpected - TS is not here")
+        }
+
+        consumers.push(consumer);
+    } else {
+        for filter in &req.filters {
+            let scanned_block = manager.load_block(&part_info, filter.column);
+            let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
+            scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
+            consumers.push(consumer);
+        }
+    }
+
+    let combined_consumer = BlockScanConsumer::merge_and_scans(&consumers);
+    combined_consumer.materialize(&manager, part_info, &req.projection, &mut scan_msg);
+
+    total_materialized += scan_msg.row_count;
+    total_matched += combined_consumer.matching_offsets.len();
+
+    println!("Scanning and matching/materializing {}/{} elements took {:?}", total_matched, total_materialized, scan_duration.elapsed());
+
+    scan_msg
+}
+
+// FIXME: this is ugly copypasta
+
+pub fn full_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
     let scan_duration = Instant::now();
 
     let mut total_matched = 0;
@@ -158,10 +223,11 @@ fn it_works() {
 }
 
 #[test]
-fn api_message_serialization() {
+fn api_scan_message_serialization() {
     let scan_req = ScanRequest {
         min_ts: 100 as u64,
         max_ts: 200 as u64,
+        partition_id: 0,
         filters: vec![
             ScanFilter {
                 column: 5,
@@ -185,4 +251,32 @@ fn api_message_serialization() {
     println!("Scan request: {:?}", serialize(&scan_req, Infinite).unwrap());
     println!("Payload length: {}", api_msg.payload.len());
     println!("Serialized api message for scan: {:?}", serialized_msg);
+}
+
+#[test]
+fn api_refresh_catalog_serialization() {
+    let pseudo_response = RefreshCatalogResponse{
+        columns: vec![
+            Column {
+                data_type: BlockType::Int64Dense,
+                name: String::from("ts")
+            },
+            Column {
+                data_type: BlockType::Int32Sparse,
+                name: String::from("source")
+            }
+        ],
+        available_partitions: vec![
+            PartitionInfo{
+                min_ts: 100,
+                max_ts: 200,
+                id: 999,
+                location: String::from("/foo/bar")
+            }
+        ]
+    };
+
+    let x:String = String::from("abc");
+    println!("String response: {:?}", serialize(&x, Infinite).unwrap());
+    println!("Pseudo catalog refresh response: {:?}", serialize(&pseudo_response, Infinite).unwrap());
 }

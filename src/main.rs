@@ -114,6 +114,7 @@ fn prepare_fake_data(manager : &mut Manager) {
         manager.insert(&msg);
     }
 
+    manager.store_catalog();
     manager.dump_in_mem_partition();
 
     println!("Creating {} records took {:?}", total_count, create_duration.elapsed());
@@ -144,20 +145,17 @@ fn main() {
 
     let mut manager = Manager::new(String::from("/tmp/hyena"));
 
-    prepare_catalog(&mut manager);
+    manager.reload_catalog();
+
+    for part in &manager.catalog.available_partitions {
+        println!("Partition: {} for range [{} - {}]", part.id, part.min_ts, part.max_ts);
+    }
+
+//    prepare_catalog(&mut manager);
 //    prepare_fake_data(&mut manager);
 //    prepare_demo_scan(&mut manager);
 
     start_endpoint(&mut manager);
 
-
-//    let ref scanned_block = partition.blocks[4];
-//    let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
-//    scanned_block.scan(ScanComparison::LtEq, &(1363258435234989944 as u64), &mut consumer);
-
-//    println!("Scanning and matching {} elements took {:?}", consumer.matching_offsets.len(), scan_duration.elapsed());
-
-    //    println!("Elapsed: {} ms",
-//             (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64);
 
 }

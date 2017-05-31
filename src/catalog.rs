@@ -28,6 +28,7 @@ pub struct Catalog {
 pub struct PartitionInfo {
     pub min_ts: u64,
     pub max_ts: u64,
+    pub id: u64,
     pub location: String
 }
 

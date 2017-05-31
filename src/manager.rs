@@ -36,6 +36,8 @@ fn save_data<T: Serialize>(path : &String, data : &T) {
 }
 
 fn read_block(path : &String) -> Block {
+    println!("Reading block {}", path);
+
     let file = File::open(path).unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut buf: Vec<u8> = Vec::new();
@@ -53,6 +55,26 @@ impl Manager {
     pub fn add_column(&mut self, data_type: BlockType, name: String) {
         let col = self.catalog.add_column(data_type, name);
         self.current_partition.blocks.push(Block::create_block(&col.data_type));
+    }
+
+    pub fn find_partition_info(&self, partition_id: u64) -> PartitionInfo {
+        for part in &self.catalog.available_partitions {
+            if part.id == partition_id {
+                return part.to_owned();
+            }
+        }
+
+        println!("Could not find partition_id {}", partition_id);
+
+        // FIXME -> RESULT
+//        fail!("NOPE");
+        let pi = PartitionInfo{
+            min_ts: 0,
+            max_ts: 0,
+            id: 0,
+            location: String::from("dupa")
+        };
+        pi
     }
 
     pub fn insert(&mut self, msg : &InsertMessage) {
@@ -119,18 +141,18 @@ impl Manager {
     }
 
     pub fn partition_path(&self, metadata : &PartitionMetadata) -> String {
-        let mut catalog_file_name = self.db_home.to_owned() + "/partitions/";
+        let mut partition_file_name = self.db_home.to_owned() + "/partitions/";
 
         let min_ts = metadata.min_ts / 1000000;
 
         for i in vec![10000000, 100000, 100] {
             let ts = (min_ts / i)*i;
-            catalog_file_name += &format!("{}/", ts);
+            partition_file_name += &format!("{}/", ts);
         }
 
-        catalog_file_name += &metadata.min_ts.to_string();
+        partition_file_name += &metadata.min_ts.to_string();
 
-        catalog_file_name
+        partition_file_name
     }
 
     pub fn reload_catalog(&mut self) {
@@ -167,16 +189,11 @@ impl Manager {
     }
 
     pub fn load_block(&self, pinfo : &PartitionInfo, block_index : u32) -> Block {
-//        let part_path = self.partition_path(part.metadata);
         let part_path = &pinfo.location;
-        
+
         // TODO: block might not exist and it should be considered OK in many circumstances
         read_block(&format!("{}/block_{}.bin", part_path, block_index))
     }
-
-//    pub fn load_partition(&self) {
-//        // Just create in-mem structures for empty blocks?
-//    }
 
     pub fn dump_in_mem_partition(&mut self) {
         if self.current_partition.blocks.is_empty() {
@@ -190,6 +207,7 @@ impl Manager {
         self.catalog.available_partitions.push(PartitionInfo {
             min_ts: self.current_partition.metadata.min_ts,
             max_ts: self.current_partition.metadata.max_ts,
+            id: self.current_partition.metadata.id,
             location: stored_path
         });
 

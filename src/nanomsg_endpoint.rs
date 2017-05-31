@@ -2,7 +2,7 @@ use bincode::{serialize, deserialize, Infinite};
 
 use nanomsg::{Socket, Protocol, Error};
 
-use api::{ApiMessage, ApiOperation, scan_and_materialize};
+use api::{ApiMessage, ApiOperation, part_scan_and_materialize};
 use manager::Manager;
 
 use std::io::{Read, Write};
@@ -25,12 +25,19 @@ pub fn start_endpoint(manager : &mut Manager) {
             ApiOperation::Scan => {
                 println!("Scan request: {:?}", req.extract_scan_request());
 
-                let materialized_msg = scan_and_materialize(manager, &req.extract_scan_request());
-
-
+                let materialized_msg = part_scan_and_materialize(manager, &req.extract_scan_request());
+                let buf = serialize(&materialized_msg, Infinite).unwrap();
+                socket.write(&buf).unwrap();
             },
+            ApiOperation::RefreshCatalog => {
+                println!("Refresh catalog response");
+
+                let buf = serialize(&manager.catalog, Infinite).unwrap();
+                socket.write(&buf).unwrap();
+            }
             ApiOperation::Insert => println!("Insert"),
-            _ => println!("Not scan")
+
+            _ => println!("Not supported...")
         }
     }
 }
