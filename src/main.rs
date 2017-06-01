@@ -36,7 +36,7 @@ use api::{ScanResultMessage, ScanComparison};
 
 use api::InsertMessage;
 
-use manager::Manager;
+use manager::{Manager, BlockCache};
 
 static TEST_COLS_SPARSE_I64: u32 = 20;
 static TEST_ROWS_PER_PACKAGE: u32 = 100000;
@@ -133,7 +133,8 @@ fn prepare_demo_scan(manager : &mut Manager) {
         scanned_block.scan(ScanComparison::LtEq, &(1363258435234989944 as u64), &mut consumer);
 
         let mut scan_msg = ScanResultMessage::new();
-        consumer.materialize(&manager, part_info, &vec![0,1,3,4,5], &mut scan_msg);
+        let mut cache = BlockCache::new(part_info);
+        consumer.materialize(&manager, &mut cache, &vec![0,1,3,4,5], &mut scan_msg);
 
         total_materialized += scan_msg.row_count;
         total_matched += consumer.matching_offsets.len();

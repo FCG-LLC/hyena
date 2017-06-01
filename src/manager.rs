@@ -20,6 +20,55 @@ pub struct Manager {
     pub current_partition: Partition
 }
 
+// To be used only within extremely limited context
+pub struct BlockCache {
+    pub partition_info : PartitionInfo,
+    pub cache:Vec<(u32, Block)>
+}
+
+impl BlockCache {
+    pub fn new(partition_info : &PartitionInfo) -> BlockCache {
+        BlockCache {
+            partition_info: (partition_info.to_owned()),
+            cache: Vec::new()
+        }
+    }
+
+    pub fn cache_block(&mut self, block : Block, block_index: u32) {
+        self.cache.push((block_index, block));
+    }
+
+    pub fn cached_block_maybe<'a>(&'a self, block_index: u32) -> Option<&'a Block> {
+        for tuple in &self.cache {
+            let cached_index = tuple.0;
+            let ref cached_block = tuple.1;
+            if block_index == cached_index {
+                return Option::from(cached_block);
+            }
+        }
+        Option::None
+    }
+
+//    fn fetch_block(&'a self, block_index : u32) -> Block {
+//        manager.load_block(&self.partition_info, block_index)
+//    }
+
+//    pub fn get_cached_or_load(&mut self, manager : &Manager, block_index : u32) -> &Block {
+//        let block_option = self.find_cached_block(block_index);
+//
+//        match block_option {
+//            None => {
+//                let block = manager.load_block(&self.partition_info, block_index);
+//                self.cache.push((block_index, &block));
+//                return &block;
+//            }
+//            Some(ref x) => {
+//                return x;
+//            }
+//        }
+//    }
+}
+
 fn ensure_partition_is_current(catalog: &Catalog, part: &mut Partition) {
     if part.blocks.len() < catalog.columns.len() {
         for block_no in part.blocks.len()..catalog.columns.len() {

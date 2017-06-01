@@ -1,6 +1,6 @@
 use bincode::{serialize, deserialize, Infinite};
 use catalog::{BlockType, Column, PartitionInfo};
-use manager::Manager;
+use manager::{Manager, BlockCache};
 use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable};
 use std::time::Instant;
 use scan::{BlockScanConsumer};
@@ -103,6 +103,42 @@ pub fn insert_serialized_request(manager: &mut Manager, buf : &Vec<u8>) {
 
 // FIXME: this is ugly copypasta
 
+fn consume_empty_filter<'a>(manager : &Manager, cache : &'a mut BlockCache, consumer : &mut BlockScanConsumer) {
+    let scanned_block = manager.load_block(&cache.partition_info, 0); // ts
+
+    match &scanned_block {
+        &Block::Int64Dense(ref x) => {
+            for i in 0..x.data.len() {
+                consumer.matching_offsets.push(i as u32);
+            }
+        },
+        _ => println!("This is unexpected - TS is not here")
+    }
+
+    cache.cache_block(scanned_block, 0);
+}
+
+fn consume_filters<'a>(manager : &'a Manager, cache: &'a mut BlockCache, filter: &'a ScanFilter, mut consumer: &mut BlockScanConsumer) {
+    let scanned_block = manager.load_block(&cache.partition_info, filter.column); // ts
+    scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
+    cache.cache_block(scanned_block, filter.column);
+
+    // FIXME: why this doesn't work?
+
+//    let block_maybe = cache.cached_block_maybe(filter.column);
+//    match block_maybe {
+//        None => {
+//            let scanned_block = manager.load_block(&cache.partition_info, filter.column); // ts
+//            scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
+//            cache.cache_block(scanned_block, filter.column);
+//        },
+//        Some(ref x) => {
+//            x.scan(filter.op.clone(), &filter.val, &mut consumer);
+//        }
+//    };
+
+}
+
 pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
     let scan_duration = Instant::now();
 
@@ -114,31 +150,22 @@ pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanR
     let part_info = &manager.find_partition_info(req.partition_id);
 
     let mut consumers:Vec<BlockScanConsumer> = Vec::new();
+    let mut cache = BlockCache::new(part_info);
 
     if req.filters.is_empty() {
         let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
-        let scanned_block = manager.load_block(&part_info, 0); // ts
-        match scanned_block {
-            Block::Int64Dense(ref x) => {
-                for i in 0..x.data.len() {
-                    consumer.matching_offsets.push(i as u32);
-                }
-            },
-            _ => println!("This is unexpected - TS is not here")
-        }
-
+        consume_empty_filter(manager, &mut cache, &mut consumer);
         consumers.push(consumer);
     } else {
         for filter in &req.filters {
-            let scanned_block = manager.load_block(&part_info, filter.column);
             let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
-            scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
+            consume_filters(manager, &mut cache, &filter, &mut consumer);
             consumers.push(consumer);
         }
     }
 
     let combined_consumer = BlockScanConsumer::merge_and_scans(&consumers);
-    combined_consumer.materialize(&manager, part_info, &req.projection, &mut scan_msg);
+    combined_consumer.materialize(&manager, &mut cache, &req.projection, &mut scan_msg);
 
     total_materialized += scan_msg.row_count;
     total_matched += combined_consumer.matching_offsets.len();
@@ -149,46 +176,6 @@ pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanR
 }
 
 // FIXME: this is ugly copypasta
-
-pub fn full_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
-    let scan_duration = Instant::now();
-
-    let mut total_matched = 0;
-    let mut total_materialized = 0;
-
-    let mut scan_msg = ScanResultMessage::new();
-
-    // FIXME: each scan message should go for separate partition
-    for part_info in &manager.catalog.available_partitions {
-
-        // FIXME: timestamp
-        // FIXME: no filters
-        // And how to do it?
-//        let consumers = req.filters.iter().map( |filter| {
-//            let scanned_block = manager.load_block(&part_info, filter.column);
-//            let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
-//            scanned_block.scan(filter.op, &filter.val, &mut consumer);
-//        });
-
-        let mut consumers:Vec<BlockScanConsumer> = Vec::new();
-        for filter in &req.filters {
-            let scanned_block = manager.load_block(&part_info, filter.column);
-            let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
-            scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
-            consumers.push(consumer);
-        }
-
-
-        let combined_consumer = BlockScanConsumer::merge_and_scans(&consumers);
-        combined_consumer.materialize(&manager, part_info, &req.projection, &mut scan_msg);
-
-        total_materialized += scan_msg.row_count;
-        total_matched += combined_consumer.matching_offsets.len();
-    }
-    println!("Scanning and matching/materializing {}/{} elements took {:?}", total_matched, total_materialized, scan_duration.elapsed());
-
-    scan_msg
-}
 
 #[test]
 fn it_works() {

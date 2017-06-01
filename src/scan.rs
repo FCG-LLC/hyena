@@ -1,7 +1,7 @@
 use catalog::PartitionInfo;
 use api::{ScanResultMessage, ScanFilter, ScanComparison};
 use catalog::Catalog;
-use manager::Manager;
+use manager::{Manager, BlockCache};
 
 
 
@@ -122,7 +122,7 @@ impl BlockScanConsumer {
         BlockScanConsumer { matching_offsets: new_matching_offsets }
     }
 
-    pub fn materialize(&self, manager : &Manager, part_info : &PartitionInfo, projection : &Vec<u32>, msg : &mut ScanResultMessage) {
+    pub fn materialize(&self, manager : &Manager, block_cache: &mut BlockCache, projection : &Vec<u32>, msg : &mut ScanResultMessage) {
         // This should work only on empty message (different implementation is of course possible,
         // if you think it would make sense to merge results)
         assert_eq!(msg.row_count, 0);
@@ -135,11 +135,20 @@ impl BlockScanConsumer {
             msg.col_types.push((*col_index, column.data_type.to_owned()));
 
             // Fetch block from disk
-            let block = manager.load_block(part_info, *col_index);
+            let block_maybe = block_cache.cached_block_maybe(*col_index);
+            match block_maybe {
+                None => {
+                    let block = manager.load_block(&block_cache.partition_info, *col_index);
+                    msg.blocks.push(block.consume(self));
+                },
+                Some(ref x) => {
+                    msg.blocks.push(x.consume(self));
+                }
+            };
 
-            msg.blocks.push(block.consume(self));
         }
     }
+
 }
 
 
