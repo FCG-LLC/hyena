@@ -9,7 +9,8 @@ use int_blocks::Block;
 pub enum BlockType {
     Int64Dense,
     Int64Sparse,
-    Int32Sparse
+    Int32Sparse,
+    String
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

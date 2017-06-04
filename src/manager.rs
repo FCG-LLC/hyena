@@ -2,7 +2,7 @@ use catalog::Catalog;
 use catalog::BlockType;
 use catalog::PartitionInfo;
 use partition::{Partition, PartitionMetadata};
-use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock};
+use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, StringBlock};
 use api::InsertMessage;
 
 use bincode::{serialize, deserialize, Infinite};
@@ -176,10 +176,33 @@ impl Manager {
                         _ => panic!("Non matching blocks")
                     }
                 }
+                &Block::StringBlock(ref in_block) => {
+                    match output_block {
+                        &mut Block::StringBlock(ref mut out_block) => {
+                            for (index, pair) in in_block.index_data.iter().enumerate() {
+                                assert!(pair.0 < msg.row_count);
+
+                                let offset = pair.0;
+                                let position = pair.1;
+
+                                out_block.index_data.push((pair.0 + current_offset as u32, out_block.str_data.len()));
+
+                                let end_position = if index < in_block.index_data.len()-1 {
+                                    in_block.index_data[index+1].1
+                                } else {
+                                    in_block.str_data.len()
+                                };
+
+                                out_block.str_data.extend(&in_block.str_data[position..end_position])
+                            }
+                        },
+                        _ => panic!("Non matching blocks")
+                    }
+                },
            }
         }
 
-        if self.current_partition.blocks[0].len() > 100000 {
+        if self.current_partition.blocks[0].len() > 200000 {
             self.dump_in_mem_partition();
         }
     }
@@ -274,6 +297,7 @@ fn create_catalog<'a>() -> Manager {
     manager.catalog.add_column(BlockType::Int64Dense, String::from("source"));
     manager.catalog.add_column(BlockType::Int64Sparse, String::from("int_01"));
     manager.catalog.add_column(BlockType::Int32Sparse, String::from("int_02"));
+    manager.catalog.add_column(BlockType::String, String::from("str"));
 
     manager.store_catalog();
 
@@ -291,14 +315,14 @@ fn create_catalog<'a>() -> Manager {
 //}
 
 #[test]
-fn it_inserts_and_loads_data() {
+fn it_inserts_and_dumps_data_smoke_test() {
     let mut manager = create_catalog();
 
     let base_ts = 1495493600 as u64 * 1000000;
     let insert_msg = InsertMessage {
         row_count: 4,
-        col_count: 4,
-        col_types: vec![(0, BlockType::Int64Dense), (1, BlockType::Int64Dense), (2, BlockType::Int64Sparse), (3, BlockType::Int32Sparse)],
+        col_count: 5,
+        col_types: vec![(0, BlockType::Int64Dense), (1, BlockType::Int64Dense), (2, BlockType::Int64Sparse), (3, BlockType::Int32Sparse), (4, BlockType::String)],
         blocks: vec![
             Block::Int64Dense(Int64DenseBlock{
                 data: vec![base_ts, base_ts+1000, base_ts+2000, base_ts+3000]
@@ -312,9 +336,12 @@ fn it_inserts_and_loads_data() {
             Block::Int32Sparse(Int32SparseBlock{
                 data: vec![(2, 300), (3, 400)]
             }),
+            Block::StringBlock(StringBlock{
+                index_data: vec![(1,0),(2,3)],
+                str_data: "foobar".as_bytes().to_vec()
+            })
         ]
     };
-
 
     manager.insert(&insert_msg);
 

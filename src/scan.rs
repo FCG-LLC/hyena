@@ -12,6 +12,10 @@ pub struct BlockScanConsumer {
 
 
 impl BlockScanConsumer {
+    pub fn new() -> BlockScanConsumer {
+        BlockScanConsumer { matching_offsets: Vec::new() }
+    }
+
     pub fn merge_or_scans(scans : &Vec<BlockScanConsumer>) -> BlockScanConsumer {
         let mut new_matching_offsets : Vec<u32> = Vec::new();
 

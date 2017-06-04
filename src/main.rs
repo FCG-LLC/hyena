@@ -68,6 +68,7 @@ fn create_message(ts_base : u64) -> InsertMessage {
             },
             _ => {
                 block = Block::Int64Sparse(Int64SparseBlock{
+                    //data: (0..TEST_ROWS_PER_PACKAGE).into_iter().filter(|r| r % col_no == 0).map(|x| (x as u32, rng.gen::<u64>())).collect()
                     data: (0..TEST_ROWS_PER_PACKAGE).into_iter().map(|x| (x as u32, rng.gen::<u64>())).collect()
                 });
                 block_type = BlockType::Int64Sparse;
@@ -108,7 +109,7 @@ fn prepare_fake_data(manager : &mut Manager) {
 
     let mut total_count : usize = 0;
 
-    for iter in 0..50 {
+    for iter in 0..100 {
         let msg = create_message(cur_ts + iter*17);
         total_count += msg.row_count as usize;
         manager.insert(&msg);
@@ -146,15 +147,16 @@ fn main() {
 
     let mut manager = Manager::new(String::from("/tmp/hyena"));
 
+//    prepare_catalog(&mut manager);
+//    prepare_fake_data(&mut manager);
+
     manager.reload_catalog();
 
     for part in &manager.catalog.available_partitions {
         println!("Partition: {} for range [{} - {}]", part.id, part.min_ts, part.max_ts);
     }
 
-//    prepare_catalog(&mut manager);
-//    prepare_fake_data(&mut manager);
-//    prepare_demo_scan(&mut manager);
+    //    prepare_demo_scan(&mut manager);
 
     start_endpoint(&mut manager);
 

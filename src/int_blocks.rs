@@ -16,7 +16,8 @@ pub trait Scannable<T> {
 pub enum Block {
     Int64Dense(Int64DenseBlock),
     Int64Sparse(Int64SparseBlock),
-    Int32Sparse(Int32SparseBlock)
+    Int32Sparse(Int32SparseBlock),
+    StringBlock(StringBlock)
 }
 
 impl Block {
@@ -25,7 +26,7 @@ impl Block {
             &BlockType::Int64Dense => Block::Int64Dense(Int64DenseBlock { data: Vec::new() }),
             &BlockType::Int64Sparse => Block::Int64Sparse(Int64SparseBlock { data: Vec::new() }),
             &BlockType::Int32Sparse => Block::Int32Sparse(Int32SparseBlock { data: Vec::new() }),
-            _ => panic!("Not supported"),
+            &BlockType::String => Block::StringBlock(StringBlock::new())
         }
     }
 
@@ -33,7 +34,8 @@ impl Block {
         match self {
             &Block::Int64Dense(ref b) => b.data.len(),
             &Block::Int64Sparse(ref b) => b.data.len(),
-            &Block::Int32Sparse(ref b) => b.data.len()
+            &Block::Int32Sparse(ref b) => b.data.len(),
+            &Block::StringBlock(ref b) => b.index_data.len()
         }
     }
 
@@ -109,6 +111,60 @@ impl Int64DenseBlock {
         }
 
         return out_block;
+    }
+}
+
+// As of now this is byte array essentially
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct StringBlock {
+    // Pair: offset, start position in array; the end position might be implied
+    pub index_data : Vec<(u32, usize)>,
+    pub str_data : Vec<u8>
+}
+
+impl StringBlock {
+    pub fn new() -> StringBlock {
+        StringBlock{ index_data: Vec::new(), str_data: Vec::new() }
+    }
+
+    pub fn append(&mut self, o: u32, v: &[u8]) {
+        let last_index = self.str_data.len();
+        let str_bytes = v;
+        self.index_data.push((o, last_index));
+        self.str_data.extend_from_slice(str_bytes);
+    }
+
+    pub fn filter_scan_results(&self, scan_consumer: &BlockScanConsumer) -> StringBlock {
+        let mut out_block = StringBlock::new();
+        // TODO: binary search-like operations would be faster usually (binary-search + scans)
+
+        let mut block_data_index = 0 as usize;
+        let mut scan_data_index = 0 as usize;
+
+        while scan_data_index < scan_consumer.matching_offsets.len() {
+            let target_offset = scan_consumer.matching_offsets[scan_data_index];
+            while self.index_data[block_data_index].0 < target_offset && block_data_index < self.index_data.len() {
+                block_data_index += 1;
+            }
+
+            if self.index_data[block_data_index].0 == target_offset {
+                let arr_start_position = self.index_data[block_data_index].1.to_owned();
+                let arr_end_position = if block_data_index < self.index_data.len() {
+                    self.index_data[block_data_index+1].1.to_owned()
+                } else {
+                    self.str_data.len().to_owned()
+                };
+
+                let val = &self.str_data[arr_start_position..arr_end_position];
+                out_block.append(scan_data_index as u32, val);
+                block_data_index += 1;
+            }
+
+            // Move on regardless
+           scan_data_index += 1;
+        }
+
+        out_block
     }
 }
 
@@ -189,6 +245,50 @@ impl Scannable<u64> for Int64DenseBlock {
     }
 }
 
+impl Scannable<String> for StringBlock {
+    /// Screams naiive
+    fn scan(&self, op : ScanComparison, str_val : &String, scan_consumer : &mut BlockScanConsumer) {
+        let mut prev_offset = 0 as u32;
+        let mut prev_position = 0 as usize;
+        let val = str_val.as_bytes();
+        let mut index = 0;
+
+        for &(offset_usize, position) in self.index_data.iter() {
+            let size = position - prev_position;
+            let offset = offset_usize as u32;
+
+            if index > 0 {
+                match op {
+                    ScanComparison::Eq => if size == val.len() && val == &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) },
+                    ScanComparison::NotEq => {
+                        if size != val.len() || val != &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) }
+                    },
+                    _ => println!("Ooops, this is string block - only == and <> are supported now")
+                }
+            }
+
+            prev_position = position;
+            prev_offset = offset;
+            index += 1;
+        }
+
+        // last element
+        // TODO: extract/refactor
+
+        if index > 0 {
+            let size = self.str_data.len() - prev_position;
+            let offset = prev_offset;
+            let position = self.str_data.len();
+
+            match op {
+                ScanComparison::Eq => if size == val.len() && val == &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) },
+                ScanComparison::NotEq => if size != val.len() || val != &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) },
+                _ => println!("Ooops, this is string block - only == and <> are supported now")
+            }
+        }
+
+    }
+}
 
 impl Scannable<u64> for Int64SparseBlock {
     fn scan(&self, op : ScanComparison, val : &u64, scan_consumer : &mut BlockScanConsumer) {
@@ -222,6 +322,38 @@ impl Scannable<u32> for Int32SparseBlock {
     }
 }
 
+#[test]
+fn string_block() {
+    let mut expected_block = StringBlock {
+        index_data: vec![
+            (0, 0), // foo
+            (1, 3), // bar
+            (2, 6), // ""
+            (3, 6), // snafu
+        ],
+        str_data: "foobarsnafu".as_bytes().to_vec()
+    };
+
+    let mut str_block = StringBlock::new();
+    str_block.append(0, "foo".as_bytes());
+    str_block.append(1, "bar".as_bytes());
+    str_block.append(2, "".as_bytes());
+    str_block.append(3, "snafu".as_bytes());
+
+    assert_eq!(expected_block, str_block);
+
+    let mut consumer = BlockScanConsumer::new();
+    str_block.scan(ScanComparison::Eq, &String::from("bar"), &mut consumer);
+    assert_eq!(consumer.matching_offsets, vec![1]);
+
+    consumer = BlockScanConsumer::new();
+    str_block.scan(ScanComparison::NotEq, &String::from("bar"), &mut consumer);
+    assert_eq!(consumer.matching_offsets, vec![0,2,3]);
+
+    consumer = BlockScanConsumer::new();
+    str_block.scan(ScanComparison::Eq, &String::from("snafu"), &mut consumer);
+    assert_eq!(consumer.matching_offsets, vec![3]);
+}
 
 
 #[test]

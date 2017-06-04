@@ -178,7 +178,7 @@ pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanR
 // FIXME: this is ugly copypasta
 
 #[test]
-fn it_works() {
+fn inserting_works() {
     let mut test_msg:Vec<u8> = vec![];
 
     let base_ts = 1495490000 * 1000000;
