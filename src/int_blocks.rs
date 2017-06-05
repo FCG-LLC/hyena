@@ -219,9 +219,9 @@ impl<T : Clone> TSparseBlock<T> {
         let mut offsets_index = 0 as usize;
         let mut data_index = 0 as usize;
 
-        while offsets_index < scan_consumer.matching_offsets.len() {
+        while offsets_index < scan_consumer.matching_offsets.len() && data_index < self.data.len() {
             let target_offset = scan_consumer.matching_offsets[offsets_index];
-            while self.data[data_index].0 < target_offset && data_index < self.data.len() {
+            while data_index < self.data.len() && self.data[data_index].0 < target_offset {
                 data_index += 1;
             }
 

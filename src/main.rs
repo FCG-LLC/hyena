@@ -115,7 +115,7 @@ fn prepare_catalog(manager : &mut Manager) {
         manager.catalog.add_column(BlockType::Int64Sparse, format!("col_{}", x));
     }
     for x in 0..TEST_COLS_SPARSE_STRING {
-        manager.catalog.add_column(BlockType::String, format!("col_{}", x));
+        manager.catalog.add_column(BlockType::String, format!("col_s{}", x));
     }
 
     println!("Following columns are defined");
