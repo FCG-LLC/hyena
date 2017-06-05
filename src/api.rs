@@ -35,7 +35,8 @@ pub enum ScanComparison {
 pub struct ScanFilter {
     pub column : u32,
     pub op : ScanComparison,
-    pub val : u64
+    pub val : u64,
+    pub str_val : Vec<u8>
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -54,10 +55,30 @@ pub struct RefreshCatalogResponse {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct AddColumnRequest {
+    pub column_name: String,
+    pub column_type: BlockType
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct GenericResponse {
+    pub status : u32
+}
+
+impl GenericResponse {
+    pub fn create_as_buf(status : u32) -> Vec<u8> {
+        let resp = GenericResponse { status: status };
+        serialize(&resp, Infinite).unwrap()
+    }
+}
+
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum ApiOperation {
     Insert,
     Scan,
-    RefreshCatalog
+    RefreshCatalog,
+    AddColumn
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -72,6 +93,20 @@ impl ApiMessage {
 
         let scan_request = deserialize(&self.payload[..]).unwrap();
         scan_request
+    }
+
+    pub fn extract_insert_message(&self) -> InsertMessage {
+        assert_eq!(self.op_type, ApiOperation::Insert);
+
+        let insert_message = deserialize(&self.payload[..]).unwrap();
+        insert_message
+    }
+
+    pub fn extract_add_column_message(&self) -> AddColumnRequest {
+        assert_eq!(self.op_type, ApiOperation::AddColumn);
+
+        let column_message = deserialize(&self.payload[..]).unwrap();
+        column_message
     }
 }
 
@@ -93,12 +128,6 @@ impl RefreshCatalogResponse {
             available_partitions: manager.catalog.available_partitions.to_owned()
         }
     }
-}
-
-pub fn insert_serialized_request(manager: &mut Manager, buf : &Vec<u8>) {
-    let msg : InsertMessage = deserialize(&buf[..]).unwrap();
-
-    manager.insert(&msg);
 }
 
 // FIXME: this is ugly copypasta
@@ -123,7 +152,7 @@ fn consume_filters<'a>(manager : &'a Manager, cache: &'a mut BlockCache, filter:
     scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
     cache.cache_block(scanned_block, filter.column);
 
-    // FIXME: why this doesn't work?
+    // FIXME: why following doesn't work and we need to use the above way?
 
 //    let block_maybe = cache.cached_block_maybe(filter.column);
 //    match block_maybe {
@@ -219,7 +248,8 @@ fn api_scan_message_serialization() {
             ScanFilter {
                 column: 5,
                 op: ScanComparison::GtEq,
-                val: 1000 as u64
+                val: 1000 as u64,
+                str_val: vec![]
             }
         ],
         projection: vec![0,1,2,3]
