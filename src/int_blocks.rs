@@ -57,6 +57,9 @@ impl Block {
             &Block::Int32Sparse(ref b) => {
                 output_block = Block::Int32Sparse(b.filter_scan_results(scan_consumer));
             },
+            &Block::StringBlock(ref b) => {
+                output_block = Block::StringBlock(b.filter_scan_results(scan_consumer))
+            }
             _ => panic!("Unrecognized u64 block type")
         }
 

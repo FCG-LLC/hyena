@@ -175,7 +175,7 @@ impl Manager {
                         },
                         _ => panic!("Non matching blocks")
                     }
-                }
+                },
                 &Block::StringBlock(ref in_block) => {
                     match output_block {
                         &mut Block::StringBlock(ref mut out_block) => {
@@ -196,7 +196,9 @@ impl Manager {
                                 out_block.str_data.extend(&in_block.str_data[position..end_position])
                             }
                         },
-                        _ => panic!("Non matching blocks")
+                        _ => {
+                            panic!("Non matching blocks");
+                        }
                     }
                 },
            }

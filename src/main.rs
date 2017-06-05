@@ -28,6 +28,7 @@ use int_blocks::Scannable;
 use int_blocks::Int64DenseBlock;
 use int_blocks::Int64SparseBlock;
 use int_blocks::Int32SparseBlock;
+use int_blocks::StringBlock;
 
 use partition::Partition;
 
@@ -39,7 +40,9 @@ use api::InsertMessage;
 use manager::{Manager, BlockCache};
 
 static TEST_COLS_SPARSE_I64: u32 = 20;
-static TEST_ROWS_PER_PACKAGE: u32 = 100000;
+static TEST_COLS_SPARSE_STRING: u32 = 4;
+//static TEST_ROWS_PER_PACKAGE: u32 = 100000;
+static TEST_ROWS_PER_PACKAGE: u32 = 100;
 
 fn create_message(ts_base : u64) -> InsertMessage {
     let mut rng = rand::thread_rng();
@@ -49,7 +52,7 @@ fn create_message(ts_base : u64) -> InsertMessage {
     let mut blocks : Vec<Block> = Vec::new();
     let mut col_types : Vec<(u32, BlockType)> = Vec::new();
 
-    for col_no in 0..TEST_COLS_SPARSE_I64 + 2 {
+    for col_no in 0..2 + TEST_COLS_SPARSE_I64 + TEST_COLS_SPARSE_STRING {
         let block : Block;
         let block_type : BlockType;
 
@@ -67,11 +70,27 @@ fn create_message(ts_base : u64) -> InsertMessage {
                 block_type = BlockType::Int64Dense;
             },
             _ => {
-                block = Block::Int64Sparse(Int64SparseBlock{
-                    //data: (0..TEST_ROWS_PER_PACKAGE).into_iter().filter(|r| r % col_no == 0).map(|x| (x as u32, rng.gen::<u64>())).collect()
-                    data: (0..TEST_ROWS_PER_PACKAGE).into_iter().map(|x| (x as u32, rng.gen::<u64>())).collect()
-                });
-                block_type = BlockType::Int64Sparse;
+                if col_no >= 2 + TEST_COLS_SPARSE_I64 {
+                    let mut sb = StringBlock::new();
+                    for row in 0..TEST_ROWS_PER_PACKAGE {
+                        let len:usize = 2 + (rng.gen::<u8>() as usize % 10);
+
+                        let msg:String = rand::thread_rng()
+                            .gen_ascii_chars()
+                            .take(len)
+                            .collect();
+
+                        sb.append(row, msg.as_bytes());
+                    }
+                    block = Block::StringBlock(sb);
+                    block_type = BlockType::String;
+                } else {
+                    block = Block::Int64Sparse(Int64SparseBlock{
+                        //data: (0..TEST_ROWS_PER_PACKAGE).into_iter().filter(|r| r % col_no == 0).map(|x| (x as u32, rng.gen::<u64>())).collect()
+                        data: (0..TEST_ROWS_PER_PACKAGE).into_iter().map(|x| (x as u32, rng.gen::<u64>())).collect()
+                    });
+                    block_type = BlockType::Int64Sparse;
+                }
             }
         }
 
@@ -94,6 +113,9 @@ fn prepare_catalog(manager : &mut Manager) {
     manager.catalog.add_column(BlockType::Int64Dense, String::from("source"));
     for x in 0..TEST_COLS_SPARSE_I64 {
         manager.catalog.add_column(BlockType::Int64Sparse, format!("col_{}", x));
+    }
+    for x in 0..TEST_COLS_SPARSE_STRING {
+        manager.catalog.add_column(BlockType::String, format!("col_{}", x));
     }
 
     println!("Following columns are defined");
@@ -135,7 +157,7 @@ fn prepare_demo_scan(manager : &mut Manager) {
 
         let mut scan_msg = ScanResultMessage::new();
         let mut cache = BlockCache::new(part_info);
-        consumer.materialize(&manager, &mut cache, &vec![0,1,3,4,5], &mut scan_msg);
+        consumer.materialize(&manager, &mut cache, &vec![0,1,3,4,5,24], &mut scan_msg);
 
         total_materialized += scan_msg.row_count;
         total_matched += consumer.matching_offsets.len();
@@ -147,16 +169,15 @@ fn main() {
 
     let mut manager = Manager::new(String::from("/tmp/hyena"));
 
-//    prepare_catalog(&mut manager);
-//    prepare_fake_data(&mut manager);
+    prepare_catalog(&mut manager);
+    prepare_fake_data(&mut manager);
+    prepare_demo_scan(&mut manager);
 
     manager.reload_catalog();
 
     for part in &manager.catalog.available_partitions {
         println!("Partition: {} for range [{} - {}]", part.id, part.min_ts, part.max_ts);
     }
-
-    //    prepare_demo_scan(&mut manager);
 
     start_endpoint(&mut manager);
 
