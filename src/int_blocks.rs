@@ -17,6 +17,8 @@ pub enum Block {
     Int64Dense(Int64DenseBlock),
     Int64Sparse(Int64SparseBlock),
     Int32Sparse(Int32SparseBlock),
+    Int16Sparse(Int16SparseBlock),
+    Int8Sparse(Int8SparseBlock),
     StringBlock(StringBlock)
 }
 
@@ -26,6 +28,8 @@ impl Block {
             &BlockType::Int64Dense => Block::Int64Dense(Int64DenseBlock { data: Vec::new() }),
             &BlockType::Int64Sparse => Block::Int64Sparse(Int64SparseBlock { data: Vec::new() }),
             &BlockType::Int32Sparse => Block::Int32Sparse(Int32SparseBlock { data: Vec::new() }),
+            &BlockType::Int16Sparse => Block::Int16Sparse(Int16SparseBlock { data: Vec::new() }),
+            &BlockType::Int8Sparse => Block::Int8Sparse(Int8SparseBlock { data: Vec::new() }),
             &BlockType::String => Block::StringBlock(StringBlock::new())
         }
     }
@@ -35,6 +39,8 @@ impl Block {
             &Block::Int64Dense(ref b) => b.data.len(),
             &Block::Int64Sparse(ref b) => b.data.len(),
             &Block::Int32Sparse(ref b) => b.data.len(),
+            &Block::Int16Sparse(ref b) => b.data.len(),
+            &Block::Int8Sparse(ref b) => b.data.len(),
             &Block::StringBlock(ref b) => b.index_data.len()
         }
     }
@@ -56,6 +62,12 @@ impl Block {
             },
             &Block::Int32Sparse(ref b) => {
                 output_block = Block::Int32Sparse(b.filter_scan_results(scan_consumer));
+            },
+            &Block::Int16Sparse(ref b) => {
+                output_block = Block::Int16Sparse(b.filter_scan_results(scan_consumer));
+            },
+            &Block::Int8Sparse(ref b) => {
+                output_block = Block::Int8Sparse(b.filter_scan_results(scan_consumer));
             },
             &Block::StringBlock(ref b) => {
                 output_block = Block::StringBlock(b.filter_scan_results(scan_consumer))
@@ -83,6 +95,24 @@ impl Scannable<u32> for Block {
     fn scan(&self, op: ScanComparison, val: &u32, scan_consumer: &mut BlockScanConsumer) {
         match self {
             &Block::Int32Sparse(ref b) => b.scan(op, val, scan_consumer),
+            _ => println!("Unrecognized u32 block type")
+        }
+    }
+}
+
+impl Scannable<u16> for Block {
+    fn scan(&self, op: ScanComparison, val: &u16, scan_consumer: &mut BlockScanConsumer) {
+        match self {
+            &Block::Int16Sparse(ref b) => b.scan(op, val, scan_consumer),
+            _ => println!("Unrecognized u32 block type")
+        }
+    }
+}
+
+impl Scannable<u8> for Block {
+    fn scan(&self, op: ScanComparison, val: &u8, scan_consumer: &mut BlockScanConsumer) {
+        match self {
+            &Block::Int8Sparse(ref b) => b.scan(op, val, scan_consumer),
             _ => println!("Unrecognized u32 block type")
         }
     }
@@ -144,15 +174,15 @@ impl StringBlock {
         let mut block_data_index = 0 as usize;
         let mut scan_data_index = 0 as usize;
 
-        while scan_data_index < scan_consumer.matching_offsets.len() {
+        while scan_data_index < scan_consumer.matching_offsets.len() && block_data_index < self.index_data.len() {
             let target_offset = scan_consumer.matching_offsets[scan_data_index];
-            while self.index_data[block_data_index].0 < target_offset && block_data_index < self.index_data.len() {
+            while block_data_index < self.index_data.len() && self.index_data[block_data_index].0 < target_offset {
                 block_data_index += 1;
             }
 
-            if self.index_data[block_data_index].0 == target_offset {
+            if block_data_index < self.index_data.len() && self.index_data[block_data_index].0 == target_offset {
                 let arr_start_position = self.index_data[block_data_index].1.to_owned();
-                let arr_end_position = if block_data_index < self.index_data.len() {
+                let arr_end_position = if block_data_index < self.index_data.len()-1 {
                     self.index_data[block_data_index+1].1.to_owned()
                 } else {
                     self.str_data.len().to_owned()
@@ -195,7 +225,7 @@ impl<T : Clone> TSparseBlock<T> {
                 data_index += 1;
             }
 
-            if self.data[data_index].0 == target_offset {
+            if data_index < self.data.len() && self.data[data_index].0 == target_offset {
                 let val:T = self.data[data_index].1.to_owned();
                 out_block.append(offsets_index as u32, val);
                 data_index += 1;
@@ -212,6 +242,8 @@ impl<T : Clone> TSparseBlock<T> {
 //#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub type Int64SparseBlock = TSparseBlock<u64>;
 pub type Int32SparseBlock = TSparseBlock<u32>;
+pub type Int16SparseBlock = TSparseBlock<u16>;
+pub type Int8SparseBlock = TSparseBlock<u8>;
 
 
 impl Int64SparseBlock {
@@ -229,6 +261,24 @@ impl Int32SparseBlock {
     }
     pub fn encapsulate_in_block(self) -> Block {
         Block::Int32Sparse(self)
+    }
+}
+
+impl Int16SparseBlock {
+    pub fn new() -> Int16SparseBlock {
+        Int16SparseBlock { data: Vec::new() }
+    }
+    pub fn encapsulate_in_block(self) -> Block {
+        Block::Int16Sparse(self)
+    }
+}
+
+impl Int8SparseBlock {
+    pub fn new() -> Int8SparseBlock {
+        Int8SparseBlock { data: Vec::new() }
+    }
+    pub fn encapsulate_in_block(self) -> Block {
+        Block::Int8Sparse(self)
     }
 }
 
@@ -324,6 +374,39 @@ impl Scannable<u32> for Int32SparseBlock {
         }
     }
 }
+
+impl Scannable<u16> for Int16SparseBlock {
+    fn scan(&self, op : ScanComparison, val : &u16, scan_consumer : &mut BlockScanConsumer) {
+        for &(offset, value_ref) in self.data.iter() {
+            let value = &value_ref;
+            match op {
+                ScanComparison::Lt => if value < val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::LtEq => if value <= val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::Eq => if value == val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::GtEq => if value >= val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::Gt => if value > val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::NotEq => if value != val { scan_consumer.matching_offsets.push(offset) },
+            }
+        }
+    }
+}
+
+impl Scannable<u8> for Int8SparseBlock {
+    fn scan(&self, op : ScanComparison, val : &u8, scan_consumer : &mut BlockScanConsumer) {
+        for &(offset, value_ref) in self.data.iter() {
+            let value = &value_ref;
+            match op {
+                ScanComparison::Lt => if value < val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::LtEq => if value <= val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::Eq => if value == val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::GtEq => if value >= val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::Gt => if value > val { scan_consumer.matching_offsets.push(offset) },
+                ScanComparison::NotEq => if value != val { scan_consumer.matching_offsets.push(offset) },
+            }
+        }
+    }
+}
+
 
 #[test]
 fn string_block() {

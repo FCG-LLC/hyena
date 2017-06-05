@@ -176,6 +176,30 @@ impl Manager {
                         _ => panic!("Non matching blocks")
                     }
                 },
+                &Block::Int16Sparse(ref in_block) => {
+                    match output_block {
+                        &mut Block::Int16Sparse(ref mut out_block) => {
+                            for pair in &in_block.data {
+                                assert!(pair.0 < msg.row_count);
+
+                                out_block.data.push((pair.0 + current_offset as u32, pair.1));
+                            }
+                        },
+                        _ => panic!("Non matching blocks")
+                    }
+                },
+                &Block::Int8Sparse(ref in_block) => {
+                    match output_block {
+                        &mut Block::Int8Sparse(ref mut out_block) => {
+                            for pair in &in_block.data {
+                                assert!(pair.0 < msg.row_count);
+
+                                out_block.data.push((pair.0 + current_offset as u32, pair.1));
+                            }
+                        },
+                        _ => panic!("Non matching blocks")
+                    }
+                },
                 &Block::StringBlock(ref in_block) => {
                     match output_block {
                         &mut Block::StringBlock(ref mut out_block) => {

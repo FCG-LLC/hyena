@@ -10,6 +10,8 @@ pub enum BlockType {
     Int64Dense,
     Int64Sparse,
     Int32Sparse,
+    Int16Sparse,
+    Int8Sparse,
     String
 }
 
