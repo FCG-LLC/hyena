@@ -149,7 +149,18 @@ fn consume_empty_filter<'a>(manager : &Manager, cache : &'a mut BlockCache, cons
 
 fn consume_filters<'a>(manager : &'a Manager, cache: &'a mut BlockCache, filter: &'a ScanFilter, mut consumer: &mut BlockScanConsumer) {
     let scanned_block = manager.load_block(&cache.partition_info, filter.column); // ts
-    scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
+    // String or Int?
+    //manager.catalog.columns[filter.column]
+
+    match &scanned_block {
+        &Block::StringBlock(ref x) => {
+            let str_value:String = String::from_utf8(filter.str_val.to_owned()).unwrap();
+            scanned_block.scan(filter.op.clone(), &str_value, &mut consumer)
+        },
+        _ => scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer)
+    }
+//    scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
+
     cache.cache_block(scanned_block, filter.column);
 
     // FIXME: why following doesn't work and we need to use the above way?
@@ -204,7 +215,13 @@ pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanR
     scan_msg
 }
 
-// FIXME: this is ugly copypasta
+#[test]
+fn string_filters() {
+    let input_str_val_bytes:Vec<u8> = vec![84, 101];
+    let filter_val:String = String::from_utf8(input_str_val_bytes).unwrap();
+    assert_eq!("Te", filter_val);
+}
+
 
 #[test]
 fn inserting_works() {

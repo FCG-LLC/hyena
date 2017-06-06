@@ -71,13 +71,21 @@ impl Block {
             },
             &Block::StringBlock(ref b) => {
                 output_block = Block::StringBlock(b.filter_scan_results(scan_consumer))
-            }
-            _ => panic!("Unrecognized u64 block type")
+            },
+            _ => panic!("Unrecognized block type")
         }
 
         output_block
     }
+}
 
+impl Scannable<String> for Block {
+    fn scan(&self, op: ScanComparison, val: &String, scan_consumer: &mut BlockScanConsumer) {
+        match self {
+            &Block::StringBlock(ref b) => b.scan(op, val, scan_consumer),
+            _ => panic!("Wrong block type for String scan")
+        }
+    }
 }
 
 impl Scannable<u64> for Block {
@@ -88,7 +96,6 @@ impl Scannable<u64> for Block {
             _ => panic!("Unrecognized u64 block type")
         }
     }
-
 }
 
 impl Scannable<u32> for Block {
@@ -299,7 +306,7 @@ impl Scannable<u64> for Int64DenseBlock {
 }
 
 impl Scannable<String> for StringBlock {
-    /// Screams naiive
+    /// Screams naiive!
     fn scan(&self, op : ScanComparison, str_val : &String, scan_consumer : &mut BlockScanConsumer) {
         let mut prev_offset = 0 as u32;
         let mut prev_position = 0 as usize;
