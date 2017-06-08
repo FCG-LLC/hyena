@@ -266,6 +266,7 @@ impl Manager {
     }
 
     pub fn store_catalog(&self) {
+        println!("Saving catalog");
         fs::create_dir_all(&self.db_home);
 
         save_data(&self.catalog_path(), &self.catalog);
@@ -311,6 +312,8 @@ impl Manager {
             id: self.current_partition.metadata.id,
             location: stored_path
         });
+
+        self.store_catalog();
 
         self.current_partition = Partition::new();
     }
