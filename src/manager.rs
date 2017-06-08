@@ -102,6 +102,9 @@ impl Manager {
     }
 
     pub fn add_column(&mut self, data_type: BlockType, name: String) {
+        ensure_partition_is_current(&self.catalog, &mut self.current_partition);
+
+        println!("Adding column <{}> of type {:?}", name, data_type);
         let col = self.catalog.add_column(data_type, name);
         self.current_partition.blocks.push(Block::create_block(&col.data_type));
     }
@@ -127,7 +130,7 @@ impl Manager {
     }
 
     pub fn insert(&mut self, msg : &InsertMessage) {
-        println!("Inserting message of {} records", msg.row_count);
+        println!("Inserting a message of {} records", msg.row_count);
 
         // TODO: validate columns - their types and if they exist
 

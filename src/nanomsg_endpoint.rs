@@ -12,12 +12,12 @@ pub fn start_endpoint(manager : &mut Manager) {
     let mut endpoint = socket.bind("ipc:///tmp/hyena.ipc").unwrap();
 
     while true {
-        println!("Waiting for message");
+        println!("Waiting for message...");
 
         let mut buf: Vec<u8> = Vec::new();
         socket.read_to_end(&mut buf).unwrap();
 
-        println!("Received buffer: {:?}", buf);
+//        println!("Received buffer: {:?}", buf);
 
         let req : ApiMessage = deserialize(&buf[..]).unwrap();
 
@@ -36,12 +36,14 @@ pub fn start_endpoint(manager : &mut Manager) {
                 socket.write(&buf).unwrap();
             }
             ApiOperation::Insert => {
+                println!("Insert request");
                 let materialized_msg = &req.extract_insert_message();
                 manager.insert(&materialized_msg);
 
                 socket.write(&GenericResponse::create_as_buf(0));
             },
             ApiOperation::AddColumn => {
+                println!("Add column request");
                 let materialized_msg = &req.extract_add_column_message();
                 manager.add_column(materialized_msg.column_type.to_owned(), materialized_msg.column_name.to_owned());
 

@@ -5,7 +5,7 @@ use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Sca
 use std::time::Instant;
 use scan::{BlockScanConsumer};
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InsertMessage {
     pub row_count : u32,
     pub col_count : u32,
@@ -13,7 +13,7 @@ pub struct InsertMessage {
     pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ScanResultMessage {
     pub row_count : u32,
     pub col_count : u32,
