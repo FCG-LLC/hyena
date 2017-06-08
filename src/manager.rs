@@ -257,12 +257,16 @@ impl Manager {
     }
 
     pub fn reload_catalog(&mut self) {
-        let file = File::open(self.catalog_path()).unwrap();
-        let mut buf_reader = BufReader::new(file);
-        let mut buf: Vec<u8> = Vec::new();
-        buf_reader.read_to_end(&mut buf).unwrap();
+        if Path::new(&self.catalog_path()).exists() {
+            let file = File::open(self.catalog_path()).unwrap();
+            let mut buf_reader = BufReader::new(file);
+            let mut buf: Vec<u8> = Vec::new();
+            buf_reader.read_to_end(&mut buf).unwrap();
 
-        self.catalog = deserialize(&buf[..]).unwrap();
+            self.catalog = deserialize(&buf[..]).unwrap();
+        } else {
+            println!("Catalog does not exist. Skipping loading it.");
+        }
     }
 
     pub fn store_catalog(&self) {
@@ -292,9 +296,16 @@ impl Manager {
 
     pub fn load_block(&self, pinfo : &PartitionInfo, block_index : u32) -> Block {
         let part_path = &pinfo.location;
+        let block_path = format!("{}/block_{}.bin", part_path, block_index);
 
-        // TODO: block might not exist and it should be considered OK in many circumstances
-        read_block(&format!("{}/block_{}.bin", part_path, block_index))
+        if Path::new(&self.catalog_path()).exists() {
+            read_block(&block_path)
+        } else {
+            // Lets return empty block (which should be the same as if the block does not exist)
+            let data_type = &self.catalog.columns[block_index as usize].data_type;
+            Block::create_block(data_type)
+        }
+
     }
 
     pub fn dump_in_mem_partition(&mut self) {

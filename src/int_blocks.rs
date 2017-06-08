@@ -111,7 +111,7 @@ impl Scannable<u16> for Block {
     fn scan(&self, op: ScanComparison, val: &u16, scan_consumer: &mut BlockScanConsumer) {
         match self {
             &Block::Int16Sparse(ref b) => b.scan(op, val, scan_consumer),
-            _ => println!("Unrecognized u32 block type")
+            _ => println!("Unrecognized u16 block type")
         }
     }
 }
@@ -120,7 +120,7 @@ impl Scannable<u8> for Block {
     fn scan(&self, op: ScanComparison, val: &u8, scan_consumer: &mut BlockScanConsumer) {
         match self {
             &Block::Int8Sparse(ref b) => b.scan(op, val, scan_consumer),
-            _ => println!("Unrecognized u32 block type")
+            _ => println!("Unrecognized u8 block type")
         }
     }
 }
