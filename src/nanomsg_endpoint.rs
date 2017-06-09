@@ -48,6 +48,12 @@ pub fn start_endpoint(manager : &mut Manager) {
                 manager.add_column(materialized_msg.column_type.to_owned(), materialized_msg.column_name.to_owned());
 
                 socket.write(&GenericResponse::create_as_buf(0));
+            },
+            ApiOperation::Flush => {
+                println!("Flush request");
+                manager.dump_in_mem_partition();
+
+                socket.write(&GenericResponse::create_as_buf(0));
             }
             _ => println!("Not supported...")
         }

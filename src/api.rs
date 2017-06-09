@@ -78,7 +78,8 @@ pub enum ApiOperation {
     Insert,
     Scan,
     RefreshCatalog,
-    AddColumn
+    AddColumn,
+    Flush
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
