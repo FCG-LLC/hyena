@@ -6,6 +6,7 @@ use api::{ApiMessage, ApiOperation, part_scan_and_materialize, GenericResponse};
 use manager::Manager;
 
 use std::io::{Read, Write};
+use std::thread;
 
 pub fn start_endpoint(manager : &mut Manager) {
     let mut socket = Socket::new(Protocol::Rep).unwrap();
@@ -25,7 +26,8 @@ pub fn start_endpoint(manager : &mut Manager) {
             ApiOperation::Scan => {
                 println!("Scan request: {:?}", req.extract_scan_request());
 
-                let materialized_msg = part_scan_and_materialize(manager, &req.extract_scan_request());
+                let scan_request = req.extract_scan_request();
+                let materialized_msg = part_scan_and_materialize(manager, &scan_request);
                 let buf = serialize(&materialized_msg, Infinite).unwrap();
                 socket.write(&buf).unwrap();
             },

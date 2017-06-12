@@ -3,7 +3,7 @@ use bincode::{serialize, deserialize, Infinite};
 use api::ScanComparison;
 use scan::BlockScanConsumer;
 use catalog::BlockType;
-
+use std::cmp;
 
 // Sorry for this copypasta, it took me bit more time to make templates work and still had some issues, so consider this just a mock
 
@@ -183,6 +183,7 @@ impl StringBlock {
 
         while scan_data_index < scan_consumer.matching_offsets.len() && block_data_index < self.index_data.len() {
             let target_offset = scan_consumer.matching_offsets[scan_data_index];
+
             while block_data_index < self.index_data.len() && self.index_data[block_data_index].0 < target_offset {
                 block_data_index += 1;
             }
@@ -305,7 +306,37 @@ impl Scannable<u64> for Int64DenseBlock {
     }
 }
 
+
+// This is not utf-8 aware
+fn strings_ne_match(s1 : &[u8], op : &ScanComparison, s2 : &[u8]) -> bool {
+    for i in 0..cmp::min(s1.len(), s2.len()) {
+        if s1[i] == s2[i] {
+            // just continue
+        } else {
+            match op {
+                &ScanComparison::LtEq => return s1[i] < s2[i],
+                &ScanComparison::Lt => return s1[i] < s2[i],
+                &ScanComparison::Gt => return s1[i] > s2[i],
+                &ScanComparison::GtEq => return s1[i] > s2[i],
+                //_ => println!("Only <, <=, >=, > matches are handled here..."); return false
+                _ => return false
+            }
+        }
+    }
+
+    // The shorter string was a substring of the longer one...
+    match op {
+        &ScanComparison::LtEq => return s1.len() < s2.len(),
+        &ScanComparison::Lt => return s1.len() < s2.len(),
+        &ScanComparison::Gt => return s1.len() > s2.len(),
+        &ScanComparison::GtEq => return s1.len() > s2.len(),
+        _ => return false
+//        _ => println!("Only <, <=, >=, > matches are handled here...")
+    }
+}
+
 impl Scannable<String> for StringBlock {
+
     /// Screams naiive!
     fn scan(&self, op : ScanComparison, str_val : &String, scan_consumer : &mut BlockScanConsumer) {
         let mut prev_offset = 0 as u32;
@@ -320,10 +351,11 @@ impl Scannable<String> for StringBlock {
             if index > 0 {
                 match op {
                     ScanComparison::Eq => if size == val.len() && val == &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) },
+//                    ScanComparison::Lt =>
                     ScanComparison::NotEq => {
                         if size != val.len() || val != &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) }
                     },
-                    _ => println!("Ooops, this is string block - only == and <> are supported now")
+                    _ => if strings_ne_match(&self.str_data[prev_position..position], &op, val) { scan_consumer.matching_offsets.push(prev_offset) }
                 }
             }
 
@@ -343,7 +375,7 @@ impl Scannable<String> for StringBlock {
             match op {
                 ScanComparison::Eq => if size == val.len() && val == &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) },
                 ScanComparison::NotEq => if size != val.len() || val != &self.str_data[prev_position..position] { scan_consumer.matching_offsets.push(prev_offset) },
-                _ => println!("Ooops, this is string block - only == and <> are supported now")
+                _ => if strings_ne_match(&self.str_data[prev_position..position], &op, val) { scan_consumer.matching_offsets.push(prev_offset) }
             }
         }
 
