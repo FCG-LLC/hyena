@@ -8,13 +8,19 @@ use manager::Manager;
 use std::io::{Read, Write};
 use std::thread;
 use std::time::Instant;
+use std::fs::{Permissions, metadata, set_permissions};
+use std::os::unix::fs::PermissionsExt;
 
 const FLUSH_AFTER_ROWS: usize = 10_000;
 const FLUSH_AFTER_SECS: usize = 300;
+const HYENA_SOCKET_PATH: &str = "/tmp/hyena.ipc";
 
 pub fn start_endpoint(manager : &mut Manager) {
     let mut socket = Socket::new(Protocol::Rep).unwrap();
-    let mut endpoint = socket.bind("ipc:///tmp/hyena.ipc").unwrap();
+    let mut endpoint = socket.bind(&format!("ipc://{}", HYENA_SOCKET_PATH)).unwrap();
+    let mut perms = metadata(HYENA_SOCKET_PATH).unwrap().permissions();
+    perms.set_mode(0o775);
+    set_permissions(HYENA_SOCKET_PATH, perms).unwrap();
     let mut last_flush = None::<Instant>;
     let mut rows_inserted = 0_usize;
 
