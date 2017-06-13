@@ -7,10 +7,16 @@ use manager::Manager;
 
 use std::io::{Read, Write};
 use std::thread;
+use std::time::Instant;
+
+const FLUSH_AFTER_ROWS: usize = 10_000;
+const FLUSH_AFTER_SECS: usize = 300;
 
 pub fn start_endpoint(manager : &mut Manager) {
     let mut socket = Socket::new(Protocol::Rep).unwrap();
     let mut endpoint = socket.bind("ipc:///tmp/hyena.ipc").unwrap();
+    let mut last_flush = None::<Instant>;
+    let mut rows_inserted = 0_usize;
 
     while true {
         println!("Waiting for message...");
@@ -42,6 +48,8 @@ pub fn start_endpoint(manager : &mut Manager) {
                 let materialized_msg = &req.extract_insert_message();
                 manager.insert(&materialized_msg);
 
+                rows_inserted += materialized_msg.row_count as usize;
+
                 socket.write(&GenericResponse::create_as_buf(0));
             },
             ApiOperation::AddColumn => {
@@ -58,6 +66,16 @@ pub fn start_endpoint(manager : &mut Manager) {
                 socket.write(&GenericResponse::create_as_buf(0));
             }
             _ => println!("Not supported...")
+        }
+
+        // check if we need to flush
+        if rows_inserted > FLUSH_AFTER_ROWS || if let Some(last_flush) = last_flush {
+            last_flush.elapsed().as_secs() > FLUSH_AFTER_SECS as u64
+        } else { false } {
+            last_flush = Some(Instant::now());
+            rows_inserted = 0;
+            println!("Forced flush");
+            manager.dump_in_mem_partition();
         }
     }
 }
