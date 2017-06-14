@@ -1,0 +1,16 @@
+Source: hyena
+Section: net
+Priority: optional
+Maintainer: Jacek Całusiński <forger@collective-sense.com>
+Build-Depends: debhelper (>= 9.0.0)
+Standards-Version: 3.9.8
+Homepage: https://github.com/FCG-LLC/hyena
+Vcs-Browser: https://github.com/FCG-LLC/hyena.git
+Vcs-Git: https://github.com/FCG-LLC/hyena.git
+
+Package: hyena
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Hyena Data Store
+ Hyena is an experimental, ultra fast data storage engine.
+

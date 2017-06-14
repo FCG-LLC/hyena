@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+%:
+	dh $@ --parallel
+
+override_dh_auto_clean:
+	CARGO_HOME=.cargo cargo clean
+	rm -rf .cargo
+
+override_dh_auto_build:
+	which cargo
+	which rustc
+	mkdir -p .cargo
+	CARGO_HOME=.cargo cargo build --release
+
