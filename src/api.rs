@@ -48,6 +48,18 @@ pub struct ScanRequest {
     pub filters : Vec<ScanFilter>
 }
 
+// Typically for log compaction only
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct DataCompactionRequest {
+    pub partition_id : u64,
+    // Defines conditions that are to be matched by records subject to compaction
+    pub filters : Vec<ScanFilter>,
+    // E.g. all fields stored in column 1234 are now to be pushed to column 5678
+    pub renamed_columns: Vec<(u32, u32)>,
+    // All fields stored in this columns will be removed
+    pub dropped_columns: Vec<u32>
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct RefreshCatalogResponse {
     pub columns: Vec<Column>,
@@ -79,7 +91,8 @@ pub enum ApiOperation {
     Scan,
     RefreshCatalog,
     AddColumn,
-    Flush
+    Flush,
+    DataCompaction
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -101,6 +114,13 @@ impl ApiMessage {
 
         let insert_message = deserialize(&self.payload[..]).unwrap();
         insert_message
+    }
+
+    pub fn extract_data_compaction_request(&self) -> DataCompactionRequest {
+        assert_eq!(self.op_type, ApiOperation::DataCompaction);
+
+        let compaction_request = deserialize(&self.payload[..]).unwrap();
+        compaction_request
     }
 
     pub fn extract_add_column_message(&self) -> AddColumnRequest {
