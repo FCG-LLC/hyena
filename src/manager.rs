@@ -305,7 +305,6 @@ impl Manager {
             let data_type = &self.catalog.columns[block_index as usize].data_type;
             Block::create_block(data_type)
         }
-
     }
 
     pub fn dump_in_mem_partition(&mut self) {

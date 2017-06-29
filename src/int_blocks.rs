@@ -12,6 +12,10 @@ pub trait Scannable<T> {
 //    fn consume(&self, scan_consumer : &BlockScanConsumer) -> Block;
 }
 
+pub trait Deletable {
+    fn delete(&mut self, offsets : &Vec<u32>);
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum Block {
     Int64Dense(Int64DenseBlock),
@@ -76,6 +80,15 @@ impl Block {
         }
 
         output_block
+    }
+}
+
+impl Deletable for Block {
+    fn delete(&mut self, offsets : &Vec<u32>) {
+        match self {
+            &mut Block::StringBlock(ref mut b) => b.delete(offsets),
+            _ => panic!("I don't know how to handle such block type")
+        }
     }
 }
 
@@ -167,6 +180,14 @@ impl StringBlock {
         StringBlock{ index_data: Vec::new(), str_data: Vec::new() }
     }
 
+    pub fn delete(&mut self, offsets: &Vec<u32>) {
+
+    }
+
+    pub fn upsert(&mut self, offsets: &Vec<u32>, v: &[u8]) {
+
+    }
+
     pub fn append(&mut self, o: u32, v: &[u8]) {
         let last_index = self.str_data.len();
         let str_bytes = v;
@@ -217,6 +238,60 @@ pub struct TSparseBlock<T:Clone> {
 impl<T : Clone> TSparseBlock<T> {
     pub fn append(&mut self, o: u32, v: T) {
         self.data.push((o, v));
+    }
+
+    pub fn delete(&mut self, offsets: &Vec<u32>) {
+        let mut indexes:Vec<usize> = Vec::new();
+
+        let mut offsets_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while offsets_index < offsets.len() && data_index < self.data.len() {
+            let target_offset = offsets[offsets_index];
+            while data_index < self.data.len() && self.data[data_index].0 < target_offset {
+                data_index += 1;
+            }
+
+            if data_index < self.data.len() && self.data[data_index].0 == target_offset {
+                indexes.push(data_index);
+                data_index += 1;
+            }
+
+            // Move on regardless
+            offsets_index += 1;
+        }
+
+        indexes.reverse();
+        for i in indexes {
+            self.data.remove(i);
+        }
+    }
+
+    pub fn upsert(&mut self, offsets: &Vec<u32>, v: T) {
+        let mut indexes:Vec<usize> = Vec::new();
+
+        let mut offsets_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while offsets_index < offsets.len() && data_index < self.data.len() {
+            let target_offset = offsets[offsets_index];
+            while data_index < self.data.len() && self.data[data_index].0 < target_offset {
+                data_index += 1;
+            }
+
+            if data_index < self.data.len() && self.data[data_index].0 == target_offset {
+                indexes.push(data_index);
+                data_index += 1;
+            }
+
+            // Move on regardless
+            offsets_index += 1;
+        }
+
+        indexes.reverse();
+        for i in indexes {
+            self.data.remove(i);
+        }
     }
 
     pub fn filter_scan_results(&self, scan_consumer : &BlockScanConsumer) -> TSparseBlock<T> {

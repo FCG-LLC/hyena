@@ -1,7 +1,7 @@
 use bincode::{serialize, deserialize, Infinite};
 use catalog::{BlockType, Column, PartitionInfo};
 use manager::{Manager, BlockCache};
-use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable};
+use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable, Deletable};
 use std::time::Instant;
 use scan::{BlockScanConsumer};
 
@@ -197,21 +197,10 @@ fn consume_filters<'a>(manager : &'a Manager, cache: &'a mut BlockCache, filter:
 //            x.scan(filter.op.clone(), &filter.val, &mut consumer);
 //        }
 //    };
-
 }
 
-pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
-    let scan_duration = Instant::now();
-
-    let mut total_matched = 0;
-    let mut total_materialized = 0;
-
-    let mut scan_msg = ScanResultMessage::new();
-
-    let part_info = &manager.find_partition_info(req.partition_id);
-
+fn part_scan_and_combine(manager: &Manager, part_info : &PartitionInfo, mut cache : &mut BlockCache, req : &ScanRequest) -> BlockScanConsumer {
     let mut consumers:Vec<BlockScanConsumer> = Vec::new();
-    let mut cache = BlockCache::new(part_info);
 
     if req.filters.is_empty() {
         let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
@@ -225,11 +214,48 @@ pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanR
         }
     }
 
-    let combined_consumer = BlockScanConsumer::merge_and_scans(&consumers);
+    BlockScanConsumer::merge_and_scans(&consumers)
+}
+
+pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
+    let part_info = &manager.find_partition_info(req.partition_id);
+    let mut cache = BlockCache::new(part_info);
+
+    let scan_req = ScanRequest {
+        min_ts: 0,
+        max_ts: 0,
+        partition_id: req.partition_id,
+        filters: req.filters.to_owned(),
+        projection: vec![]
+    };
+
+    let combined_consumer = part_scan_and_combine(manager, part_info, &mut cache, &scan_req);
+
+    // We have the list of offsets now, lets modify blocks now
+
+    // 1. removed blocks
+    for col in &req.dropped_columns {
+        let mut cur = manager.load_block(part_info, *col);
+        cur.delete(&combined_consumer.matching_offsets);
+    }
+
+    // 2. changed blocks
+
+}
+
+pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
+    let scan_duration = Instant::now();
+
+    let part_info = &manager.find_partition_info(req.partition_id);
+    let mut cache = BlockCache::new(part_info);
+
+    let combined_consumer = part_scan_and_combine(manager, part_info, &mut cache, req);
+
+    let mut scan_msg = ScanResultMessage::new();
     combined_consumer.materialize(&manager, &mut cache, &req.projection, &mut scan_msg);
 
-    total_materialized += scan_msg.row_count;
-    total_matched += combined_consumer.matching_offsets.len();
+    let total_matched = combined_consumer.matching_offsets.len();
+    let total_materialized = scan_msg.row_count;
 
     println!("Scanning and matching/materializing {}/{} elements took {:?}", total_matched, total_materialized, scan_duration.elapsed());
 
