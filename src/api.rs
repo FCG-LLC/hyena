@@ -14,6 +14,13 @@ pub struct InsertMessage {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PartialInsertMessage {
+    pub col_count : u32,
+    pub col_types : Vec<(u32, BlockType)>,
+    pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ScanResultMessage {
     pub row_count : u32,
     pub col_count : u32,
@@ -57,7 +64,9 @@ pub struct DataCompactionRequest {
     // E.g. all fields stored in column 1234 are now to be pushed to column 5678
     pub renamed_columns: Vec<(u32, u32)>,
     // All fields stored in this columns will be removed
-    pub dropped_columns: Vec<u32>
+    pub dropped_columns: Vec<u32>,
+    // Following defines values that will be updated for all matching records
+    pub upserted_data: PartialInsertMessage
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
