@@ -267,31 +267,39 @@ impl<T : Clone> TSparseBlock<T> {
         }
     }
 
-    pub fn upsert(&mut self, offsets: &Vec<u32>, v: T) {
+    pub fn multi_upsert(&mut self, offsets: &Vec<u32>, v: T) {
         let mut indexes:Vec<usize> = Vec::new();
 
         let mut offsets_index = 0 as usize;
         let mut data_index = 0 as usize;
 
-        while offsets_index < offsets.len() && data_index < self.data.len() {
+        while offsets_index < offsets.len() {
             let target_offset = offsets[offsets_index];
+
+            // Forward the self.data position to current offset
             while data_index < self.data.len() && self.data[data_index].0 < target_offset {
                 data_index += 1;
             }
 
-            if data_index < self.data.len() && self.data[data_index].0 == target_offset {
-                indexes.push(data_index);
-                data_index += 1;
+            //self.data.insert()
+            if data_index < self.data.len() {
+                if self.data[data_index].0 == target_offset {
+                    // replace; FIXME: do it without remove/insert
+                    self.data.remove(data_index);
+                    self.data.insert(data_index, (target_offset, v.to_owned()));
+                } else {
+                    // insert
+                    self.data.insert(data_index, (target_offset, v.to_owned()));
+                }
+            } else {
+                // append
+                self.data.push((target_offset, v.to_owned()));
             }
 
             // Move on regardless
             offsets_index += 1;
         }
 
-        indexes.reverse();
-        for i in indexes {
-            self.data.remove(i);
-        }
     }
 
     pub fn filter_scan_results(&self, scan_consumer : &BlockScanConsumer) -> TSparseBlock<T> {
@@ -521,6 +529,61 @@ impl Scannable<u8> for Int8SparseBlock {
     }
 }
 
+
+#[test]
+fn delete_sparse_block() {
+    let mut input_block = Int32SparseBlock {
+        data: vec![
+            (1, 100),
+            (2, 200),
+            (3, 300),
+            (6, 600),
+            (8, 800),
+            (11, 1100)
+        ]
+    };
+
+    let mut expected_block = Int32SparseBlock {
+        data: vec![
+            (1, 100),
+            (8, 800),
+            (11, 1100)
+        ]
+    };
+
+    let offsets = vec![2,3,6];
+    input_block.delete(&offsets);
+
+    assert_eq!(expected_block, input_block);
+}
+
+#[test]
+fn multi_upsert_sparse_block() {
+    let mut input_block = Int32SparseBlock {
+        data: vec![
+            (1, 100),
+            (8, 800),
+            (11, 1100)
+        ]
+    };
+
+    let mut expected_block = Int32SparseBlock {
+        data: vec![
+            (0, 9999),
+            (1, 9999),
+            (2, 9999),
+            (8, 800),
+            (11, 1100),
+            (12, 9999)
+        ]
+    };
+
+    let offsets = vec![0,1,2,12];
+    input_block.multi_upsert(&offsets, 9999);
+
+    assert_eq!(expected_block, input_block);
+
+}
 
 #[test]
 fn string_block() {

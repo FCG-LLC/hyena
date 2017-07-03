@@ -248,8 +248,9 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
         cur.delete(&combined_consumer.matching_offsets);
     }
 
-    // 2. changed blocks
+    // 2. moved blocks
 
+    // 3. upserted blocks
 }
 
 pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
