@@ -284,9 +284,8 @@ impl<T : Clone> TSparseBlock<T> {
             //self.data.insert()
             if data_index < self.data.len() {
                 if self.data[data_index].0 == target_offset {
-                    // replace; FIXME: do it without remove/insert
-                    self.data.remove(data_index);
-                    self.data.insert(data_index, (target_offset, v.to_owned()));
+                    let record = &mut self.data[data_index];
+                    record.1 = v.to_owned();
                 } else {
                     // insert
                     self.data.insert(data_index, (target_offset, v.to_owned()));
