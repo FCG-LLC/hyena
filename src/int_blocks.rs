@@ -21,7 +21,7 @@ pub trait Upsertable<T> {
 }
 
 pub trait Movable {
-    fn move_data(&mut self, target : &mut Block, offsets : &Vec<u32>);
+    fn move_data(&mut self, target : &mut Block, scan_consumer : &BlockScanConsumer);
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -104,6 +104,34 @@ impl Deletable for Block {
     }
 }
 
+impl Movable for Block {
+    fn move_data(&mut self, target: &mut Block, scan_consumer: &BlockScanConsumer) {
+        match self {
+            &mut Block::StringBlock(ref mut b) => match target {
+                &mut Block::StringBlock(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int64Sparse(ref mut b) => match target {
+                &mut Block::Int64Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int32Sparse(ref mut b) => match target {
+                &mut Block::Int32Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int16Sparse(ref mut b) => match target {
+                &mut Block::Int16Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int8Sparse(ref mut b) => match target {
+                &mut Block::Int8Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            _ => panic!("I don't know how to handle such block type")
+        }
+    }
+}
+
 impl Scannable<String> for Block {
     fn scan(&self, op: ScanComparison, val: &String, scan_consumer: &mut BlockScanConsumer) {
         match self {
@@ -123,8 +151,11 @@ impl Upsertable<String> for Block {
 
     fn upsert(&mut self, data : &Block) {
         match self {
-//            &mut Block::StringBlock(ref mut b) => b.upsert(offsets, vals),
-            _ => panic!("Wrong block type for String scan")
+            &mut Block::StringBlock(ref mut b) => match data {
+                &Block::StringBlock(ref c) => b.upsert(c),
+                _ => panic!("Wrong block type")
+            },
+            _ => panic!("Wrong block type")
         }
     }
 }
@@ -143,7 +174,7 @@ impl Upsertable<u64> for Block {
     fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &u64) {
         match self {
             &mut Block::Int64Sparse(ref mut b) => b.multi_upsert(offsets, *val),
-            _ => panic!("Wrong block type for String scan")
+            _ => panic!("Wrong block type")
         }
     }
 
@@ -171,7 +202,7 @@ impl Upsertable<u32> for Block {
     fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &u32) {
         match self {
             &mut Block::Int32Sparse(ref mut b) => b.multi_upsert(offsets, *val),
-            _ => panic!("Wrong block type for String scan")
+            _ => panic!("Wrong block type")
         }
     }
 
@@ -199,14 +230,17 @@ impl Upsertable<u16> for Block {
     fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &u16) {
         match self {
             &mut Block::Int16Sparse(ref mut b) => b.multi_upsert(offsets, *val),
-            _ => panic!("Wrong block type for String scan")
+            _ => panic!("Wrong block type")
         }
     }
 
     fn upsert(&mut self, data : &Block) {
         match self {
-//            &mut Block::Int16Sparse(ref mut b) => b.upsert(offsets, vals),
-            _ => panic!("Wrong block type for String scan")
+            &mut Block::Int16Sparse(ref mut b) => match data {
+                &Block::Int16Sparse(ref c) => b.upsert(c),
+                _ => panic!("Wrong block type")
+            },
+            _ => panic!("Wrong block type")
         }
     }
 }
@@ -372,10 +406,15 @@ impl StringBlock {
         self.str_data = new_str_data;
     }
 
-//    pub fn upsert(&mut self, offsets: &Vec<u32>, vals: &Vec<[u8]>) {
-//
-//    }
-//
+    pub fn upsert(&mut self, data : &StringBlock) {
+
+    }
+
+    pub fn move_data(&mut self, target : &mut StringBlock, scan_consumer : &BlockScanConsumer) {
+        let temp_block = self.filter_scan_results(scan_consumer);
+        target.upsert(&temp_block);
+    }
+
     pub fn append(&mut self, o: u32, v: &[u8]) {
         let last_index = self.str_data.len();
         let str_bytes = v;

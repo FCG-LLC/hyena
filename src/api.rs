@@ -255,6 +255,7 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
         let mut c1 = manager.load_block(part_info, col_pair.1);
 
 
+
     }
 
     // 3. upserted blocks
