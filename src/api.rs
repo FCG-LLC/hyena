@@ -246,9 +246,16 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
     for col in &req.dropped_columns {
         let mut cur = manager.load_block(part_info, *col);
         cur.delete(&combined_consumer.matching_offsets);
+        manager.save_block(part_info, &cur);
     }
 
     // 2. moved blocks
+    for col_pair in &req.renamed_columns {
+        let mut c0 = manager.load_block(part_info, col_pair.0);
+        let mut c1 = manager.load_block(part_info, col_pair.1);
+
+
+    }
 
     // 3. upserted blocks
 }

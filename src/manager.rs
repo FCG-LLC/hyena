@@ -294,6 +294,13 @@ impl Manager {
         part_path
     }
 
+    pub fn save_block(&self, pinfo : &PartitionInfo, block : &Block) {
+        let part_path = &pinfo.location;
+        let block_path = format!("{}/{}", part_path, pinfo.location);
+
+        save_data(&block_path, block);
+    }
+
     pub fn load_block(&self, pinfo : &PartitionInfo, block_index : u32) -> Block {
         let part_path = &pinfo.location;
         let block_path = format!("{}/block_{}.bin", part_path, block_index);
