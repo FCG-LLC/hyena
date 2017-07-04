@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ex
+
 function status {
 	echo "+----------------------------------------"
 	echo "| $1"
