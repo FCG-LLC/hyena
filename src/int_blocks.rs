@@ -388,6 +388,64 @@ impl StringBlock {
                 let cur_index = self.index_data[data_index];
 
                 // Copy from existing block
+                let end_str_index = if data_index < self.index_data.len()-1 {
+                    self.index_data[data_index+1].1
+                } else {
+                    self.str_data.len()
+                };
+
+                let cur_str_data = &self.str_data[cur_index.1..end_str_index];
+                new_index_data.push((cur_index.0, last_str_index));
+                new_str_data.extend_from_slice(cur_str_data);
+
+                data_index += 1;
+            }
+        }
+
+        self.index_data = new_index_data;
+        self.str_data = new_str_data;
+    }
+
+    pub fn upsert(&mut self, data : &StringBlock) {
+        // Because the structure is bit more complex here, lets just be naive and rewrite the str_data while updating index data?
+
+        let mut new_index_data:Vec<(u32, usize)> = Vec::new();
+        let mut new_str_data:Vec<u8> = Vec::new();
+
+        let mut input_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while input_index < data.index_data.len() || data_index < self.index_data.len() {
+            let last_str_index = new_str_data.len();
+
+            let cur_offset = if data_index < self.index_data.len() {
+                self.index_data[data_index].0
+            } else {
+                data.index_data[input_index].0
+            };
+
+            if input_index < data.index_data.len() && data.index_data[input_index].0 <= cur_offset {
+                // Update/insert the value
+                new_index_data.push((data.index_data[input_index].0, last_str_index));
+                let input_str_end = if input_index == data.index_data.len()-1 {
+                    data.str_data.len()
+                } else {
+                    data.index_data[input_index+1].1
+                };
+
+                let input_str_slice = &data.str_data[data.index_data[input_index].1..input_str_end];
+                new_str_data.extend_from_slice(input_str_slice);
+
+                if data.index_data[input_index].0 == cur_offset {
+                    // If we did update rather then insert to a non-existing entry
+                    data_index += 1;
+                }
+
+                input_index += 1;
+            } else if data_index < self.index_data.len() {
+                let cur_index = self.index_data[data_index];
+
+                // Copy from existing block
                 let end_str_index = if data_index == self.index_data.len()-1 {
                     self.str_data.len()
                 } else {
@@ -404,10 +462,6 @@ impl StringBlock {
 
         self.index_data = new_index_data;
         self.str_data = new_str_data;
-    }
-
-    pub fn upsert(&mut self, data : &StringBlock) {
-
     }
 
     pub fn move_data(&mut self, target : &mut StringBlock, scan_consumer : &BlockScanConsumer) {
@@ -861,6 +915,32 @@ fn multi_upsert_string_block() {
 
     let offsets = vec![0,2,3];
     input_block.multi_upsert(&offsets, "lol".as_bytes());
+
+    assert_eq!(expected_block, input_block);
+}
+
+#[test]
+fn upsert_string_block() {
+    let mut input_block = StringBlock::new();
+    input_block.append(1, "foo".as_bytes());
+    input_block.append(2, "bar".as_bytes());
+    input_block.append(13, "snafu".as_bytes());
+
+    let mut upsert_data = StringBlock::new();
+    upsert_data.append(0, "a0".as_bytes());
+    upsert_data.append(1, "b1".as_bytes());
+    upsert_data.append(3, "c2".as_bytes());
+
+
+    let mut expected_block = StringBlock::new();
+    expected_block.append(0, "a0".as_bytes());
+    expected_block.append(1, "b1".as_bytes());
+    expected_block.append(2, "bar".as_bytes());
+    expected_block.append(3, "c2".as_bytes());
+    expected_block.append(13, "snafu".as_bytes());
+
+    let offsets = vec![0,2,3];
+    input_block.upsert(&upsert_data);
 
     assert_eq!(expected_block, input_block);
 }
