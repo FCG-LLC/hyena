@@ -478,5 +478,36 @@ fn it_inserts_and_dumps_and_compacts_data_smoke_test() {
 
     handle_data_compaction(&manager, &req);
 
+
     // Now we need to scan and see if anything was changed
+    assert_eq!(
+        Block::Int32Sparse(Int32SparseBlock{
+            data: vec![(0, 100), (1, 101), (2, 100), (3, 101)]
+        }),
+        manager.load_block(part_info, 2)
+    );
+
+    assert_eq!(
+        Block::StringBlock(StringBlock{
+            index_data: vec![(2,0)],
+            str_data: "bar".as_bytes().to_vec()
+        }),
+        manager.load_block(part_info, 3)
+    );
+
+    assert_eq!(
+        Block::StringBlock(StringBlock{
+            index_data: vec![(0,0),(2,1)],
+            str_data: "ac".as_bytes().to_vec()
+        }),
+        manager.load_block(part_info, 4)
+    );
+
+    assert_eq!(
+        Block::StringBlock(StringBlock{
+            index_data: vec![(1,0),(3,1)],
+            str_data: "bd".as_bytes().to_vec()
+        }),
+        manager.load_block(part_info, 5)
+    );
 }

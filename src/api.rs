@@ -189,7 +189,6 @@ fn consume_filters<'a>(manager : &'a Manager, cache: &'a mut BlockCache, filter:
         },
         _ => scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer)
     }
-//    scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
 
     cache.cache_block(scanned_block, filter.column);
 
@@ -232,7 +231,7 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
 
     let scan_req = ScanRequest {
         min_ts: 0,
-        max_ts: 0,
+        max_ts: u64::max_value(),
         partition_id: req.partition_id,
         filters: req.filters.to_owned(),
         projection: vec![]
@@ -246,7 +245,7 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
     for col in &req.dropped_columns {
         let mut cur = manager.load_block(part_info, *col);
         cur.delete(&combined_consumer.matching_offsets);
-        manager.save_block(part_info, &cur);
+        manager.save_block(part_info, &cur, *col);
     }
 
     // 2. moved blocks
@@ -255,8 +254,8 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
         let mut c1 = manager.load_block(part_info, col_pair.1);
 
         c0.move_data(&mut c1, &combined_consumer);
-        manager.save_block(part_info, &c0);
-        manager.save_block(part_info, &c1);
+        manager.save_block(part_info, &c0, col_pair.0);
+        manager.save_block(part_info, &c1, col_pair.1);
     }
 
     // 3. upserted blocks
@@ -280,10 +279,22 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
                 &Block::Int64Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
                 _ => panic!("Non matching block types")
             },
+            &mut Block::Int32Sparse(ref mut b) => match input_block {
+                &Block::Int32Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
+            &mut Block::Int16Sparse(ref mut b) => match input_block {
+                &Block::Int16Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
+            &mut Block::Int8Sparse(ref mut b) => match input_block {
+                &Block::Int8Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
             _ => panic!("Not supported block type")
         }
 
-        manager.save_block(part_info, &block);
+        manager.save_block(part_info, &block, catalog_col_no);
     }
 }
 
@@ -313,6 +324,10 @@ fn string_filters() {
     assert_eq!("Te", filter_val);
 }
 
+#[test]
+fn data_compaction_test() {
+
+}
 
 #[test]
 fn inserting_works() {
