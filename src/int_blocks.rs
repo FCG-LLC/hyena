@@ -411,7 +411,6 @@ impl StringBlock {
 
     pub fn upsert(&mut self, data : &StringBlock) {
         // Because the structure is bit more complex here, lets just be naive and rewrite the str_data while updating index data?
-
         let mut new_index_data:Vec<(u32, usize)> = Vec::new();
         let mut new_str_data:Vec<u8> = Vec::new();
 
@@ -426,6 +425,7 @@ impl StringBlock {
             } else {
                 data.index_data[input_index].0
             };
+
 
             if input_index < data.index_data.len() && data.index_data[input_index].0 <= cur_offset {
                 // Update/insert the value
@@ -467,9 +467,19 @@ impl StringBlock {
         self.str_data = new_str_data;
     }
 
+    pub fn transpose_offsets(&mut self, new_offsets : &Vec<u32>) {
+        for i in 0..new_offsets.len() {
+            let record = &mut self.index_data[i];
+            record.0 = new_offsets[i];
+        }
+    }
+
     pub fn move_data(&mut self, target : &mut StringBlock, scan_consumer : &BlockScanConsumer) {
-        let temp_block = self.filter_scan_results(scan_consumer);
+        let mut temp_block = self.filter_scan_results(scan_consumer);
+        temp_block.transpose_offsets(&scan_consumer.matching_offsets);
+
         target.upsert(&temp_block);
+        self.delete(&scan_consumer.matching_offsets);
     }
 
     pub fn append(&mut self, o: u32, v: &[u8]) {
@@ -551,11 +561,19 @@ impl<T : Clone> TSparseBlock<T> {
         }
     }
 
-    pub fn move_data(&mut self, target : &mut TSparseBlock<T>, scan_consumer : &BlockScanConsumer) {
-        let temp_block = self.filter_scan_results(scan_consumer);
-        target.upsert(&temp_block);
+    pub fn transpose_offsets(&mut self, new_offsets : &Vec<u32>) {
+        for i in 0..new_offsets.len() {
+            let record = &mut self.data[i];
+            record.0 = new_offsets[i];
+        }
     }
 
+    pub fn move_data(&mut self, target : &mut TSparseBlock<T>, scan_consumer : &BlockScanConsumer) {
+        let mut temp_block = self.filter_scan_results(scan_consumer);
+        temp_block.transpose_offsets(&scan_consumer.matching_offsets);
+        target.upsert(&temp_block);
+        self.delete(&scan_consumer.matching_offsets);
+    }
 
     // Put specific value to multiple columns
     pub fn multi_upsert(&mut self, offsets: &Vec<u32>, v: T) {
@@ -572,7 +590,6 @@ impl<T : Clone> TSparseBlock<T> {
                 data_index += 1;
             }
 
-            //self.data.insert()
             if data_index < self.data.len() {
                 if self.data[data_index].0 == target_offset {
                     let record = &mut self.data[data_index];
