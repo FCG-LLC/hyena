@@ -3,7 +3,7 @@ use catalog::BlockType;
 use catalog::PartitionInfo;
 use partition::{Partition, PartitionMetadata};
 use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, StringBlock};
-use api::InsertMessage;
+use api::{InsertMessage, DataCompactionRequest, ScanFilter, ScanComparison, PartialInsertMessage, handle_data_compaction};
 
 use bincode::{serialize, deserialize, Infinite};
 use serde::ser::{Serialize};
@@ -294,9 +294,9 @@ impl Manager {
         part_path
     }
 
-    pub fn save_block(&self, pinfo : &PartitionInfo, block : &Block) {
+    pub fn save_block(&self, pinfo : &PartitionInfo, block : &Block, block_index : u32) {
         let part_path = &pinfo.location;
-        let block_path = format!("{}/{}", part_path, pinfo.location);
+        let block_path = format!("{}/block_{}.bin", part_path, block_index);
 
         save_data(&block_path, block);
     }
@@ -305,7 +305,7 @@ impl Manager {
         let part_path = &pinfo.location;
         let block_path = format!("{}/block_{}.bin", part_path, block_index);
 
-        if Path::new(&self.catalog_path()).exists() {
+        if Path::new(&block_path).exists() {
             read_block(&block_path)
         } else {
             // Lets return empty block (which should be the same as if the block does not exist)
@@ -339,7 +339,7 @@ impl Manager {
 
 
 
-fn create_catalog<'a>() -> Manager {
+fn create_test_catalog<'a>() -> Manager {
     let mut manager = Manager::new(String::from("/tmp/hyena"));
 
     manager.catalog.add_column(BlockType::Int64Dense, String::from("ts"));
@@ -363,36 +363,120 @@ fn create_catalog<'a>() -> Manager {
 //    assert_eq!(manager2.catalog, manager.catalog);
 //}
 
+//#[test]
+//fn it_inserts_and_dumps_data_smoke_test() {
+//    let mut manager = create_test_catalog();
+//
+//    let base_ts = 1495493600 as u64 * 1000000;
+//    let insert_msg = InsertMessage {
+//        row_count: 4,
+//        col_count: 5,
+//        col_types: vec![(0, BlockType::Int64Dense), (1, BlockType::Int64Dense), (2, BlockType::Int64Sparse), (3, BlockType::Int32Sparse), (4, BlockType::String)],
+//        blocks: vec![
+//            Block::Int64Dense(Int64DenseBlock{
+//                data: vec![base_ts, base_ts+1000, base_ts+2000, base_ts+3000]
+//            }),
+//            Block::Int64Dense(Int64DenseBlock{
+//                data: vec![0, 0, 1, 2]
+//            }),
+//            Block::Int64Sparse(Int64SparseBlock{
+//                data: vec![(0, 100), (1, 200)]
+//            }),
+//            Block::Int32Sparse(Int32SparseBlock{
+//                data: vec![(2, 300), (3, 400)]
+//            }),
+//            Block::StringBlock(StringBlock{
+//                index_data: vec![(1,0),(2,3)],
+//                str_data: "foobar".as_bytes().to_vec()
+//            })
+//        ]
+//    };
+//
+//    manager.insert(&insert_msg);
+//
+//    manager.dump_in_mem_partition();
+//}
+
 #[test]
-fn it_inserts_and_dumps_data_smoke_test() {
-    let mut manager = create_catalog();
+fn it_inserts_and_dumps_and_compacts_data_smoke_test() {
+    let mut manager = Manager::new(String::from("/tmp/hyena"));
+
+    manager.catalog.add_column(BlockType::Int64Dense, String::from("ts"));
+    manager.catalog.add_column(BlockType::Int64Dense, String::from("source"));
+    manager.catalog.add_column(BlockType::Int32Sparse, String::from("pattern_id"));
+    manager.catalog.add_column(BlockType::String, String::from("p1"));
+    manager.catalog.add_column(BlockType::String, String::from("p2"));
+    manager.catalog.add_column(BlockType::String, String::from("p3"));
+
+    manager.store_catalog();
 
     let base_ts = 1495493600 as u64 * 1000000;
     let insert_msg = InsertMessage {
         row_count: 4,
-        col_count: 5,
-        col_types: vec![(0, BlockType::Int64Dense), (1, BlockType::Int64Dense), (2, BlockType::Int64Sparse), (3, BlockType::Int32Sparse), (4, BlockType::String)],
+        col_count: 6,
+        col_types: vec![(0, BlockType::Int64Dense), (1, BlockType::Int64Dense), (2, BlockType::Int32Sparse), (3, BlockType::String), (4, BlockType::String), (5, BlockType::String)],
         blocks: vec![
             Block::Int64Dense(Int64DenseBlock{
                 data: vec![base_ts, base_ts+1000, base_ts+2000, base_ts+3000]
             }),
             Block::Int64Dense(Int64DenseBlock{
-                data: vec![0, 0, 1, 2]
-            }),
-            Block::Int64Sparse(Int64SparseBlock{
-                data: vec![(0, 100), (1, 200)]
+                data: vec![0, 0, 0, 0]
             }),
             Block::Int32Sparse(Int32SparseBlock{
-                data: vec![(2, 300), (3, 400)]
+                data: vec![(0, 100), (1, 100), (2, 100), (3, 100)]
             }),
             Block::StringBlock(StringBlock{
-                index_data: vec![(1,0),(2,3)],
-                str_data: "foobar".as_bytes().to_vec()
+                index_data: vec![(1,0),(2,3),(3,6)],
+                str_data: "foobarfoo".as_bytes().to_vec()
+            }),
+            Block::StringBlock(StringBlock{
+                index_data: vec![(0,0),(1,1),(2,2),(3,3)],
+                str_data: "abcd".as_bytes().to_vec()
+            }),
+            Block::StringBlock(StringBlock{
+                index_data: vec![],
+                str_data: "".as_bytes().to_vec()
             })
         ]
     };
 
     manager.insert(&insert_msg);
-
     manager.dump_in_mem_partition();
+
+    let part_info = &manager.catalog.available_partitions[0];
+
+    let filter = vec![
+        ScanFilter {
+            column: 2,
+            op: ScanComparison::Eq,
+            val: 100,
+            str_val: vec![]
+        },
+        ScanFilter {
+            column: 3,
+            op: ScanComparison::Eq,
+            val: 0,
+            str_val: "foo".as_bytes().to_vec()
+        }
+    ];
+
+    let req = DataCompactionRequest {
+        partition_id: part_info.id,
+        filters: filter,
+        renamed_columns: vec![(4, 5)],
+        dropped_columns: vec![3],
+        upserted_data: PartialInsertMessage {
+            col_count: 1,
+            col_types: vec![(2, BlockType::Int32Sparse)],
+            blocks: vec![
+                Block::Int32Sparse(Int32SparseBlock{
+                    data: vec![(0, 101)]
+                }),
+            ]
+        }
+    };
+
+    handle_data_compaction(&manager, &req);
+
+    // Now we need to scan and see if anything was changed
 }
