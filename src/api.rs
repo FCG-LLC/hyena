@@ -1,7 +1,7 @@
 use bincode::{serialize, deserialize, Infinite};
 use catalog::{BlockType, Column, PartitionInfo};
 use manager::{Manager, BlockCache};
-use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable, Deletable};
+use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable, Deletable, Movable, Upsertable};
 use std::time::Instant;
 use scan::{BlockScanConsumer};
 
@@ -254,11 +254,37 @@ pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
         let mut c0 = manager.load_block(part_info, col_pair.0);
         let mut c1 = manager.load_block(part_info, col_pair.1);
 
-
-
+        c0.move_data(&mut c1, &combined_consumer);
+        manager.save_block(part_info, &c0);
+        manager.save_block(part_info, &c1);
     }
 
     // 3. upserted blocks
+    for col_no in 0..req.upserted_data.col_count {
+        let catalog_col_no = req.upserted_data.col_types[col_no as usize].0;
+        let mut block = manager.load_block(part_info, catalog_col_no);
+
+        // The input block actually contains just a single value that will be multi-upserted
+        let input_block = &req.upserted_data.blocks[col_no as usize];
+
+        if input_block.len() != 1 {
+            panic!("The upsert block can have only one record which is copied across all matching entries");
+        }
+
+        match &mut block {
+            &mut Block::StringBlock(ref mut b) => match input_block {
+                &Block::StringBlock(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.str_data.as_slice()),
+                _ => panic!("Non matching block types")
+            },
+            &mut Block::Int64Sparse(ref mut b) => match input_block {
+                &Block::Int64Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
+            _ => panic!("Not supported block type")
+        }
+
+        manager.save_block(part_info, &block);
+    }
 }
 
 pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
