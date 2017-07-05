@@ -165,6 +165,9 @@ impl Scannable<u64> for Block {
         match self {
             &Block::Int64Dense(ref b) => b.scan(op, val, scan_consumer),
             &Block::Int64Sparse(ref b) => b.scan(op, val, scan_consumer),
+            &Block::Int32Sparse(ref b) => b.scan(op, &(*val as u32), scan_consumer),
+            &Block::Int16Sparse(ref b) => b.scan(op, &(*val as u16), scan_consumer),
+            &Block::Int8Sparse(ref b) => b.scan(op, &(*val as u8), scan_consumer),
             _ => panic!("Unrecognized u64 block type")
         }
     }
