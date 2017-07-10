@@ -12,6 +12,12 @@ RUN apt-get install apt-transport-https -y --force-yes
 RUN groupadd -g 10024 hyena
 RUN adduser --no-create-home --system --shell /bin/false --gecos 'hyena dedicated user' --uid 10024 --gid 10024 --disabled-password hyena
 
+RUN echo "deb http://10.12.1.225/public xenial $destEnv" >> /etc/apt/sources.list
+RUN echo "Package: * \
+Pin: release a=xenial \
+Pin-Priority: 1600 \
+" > /etc/apt/preferences
+
 RUN apt-get update
 RUN apt-get install -y nanomsg=*$destEnv
 RUN apt-get install -y ${hyena_package:-"hyena"}=${hyena_version:-"*"}
