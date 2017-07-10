@@ -1,6 +1,7 @@
 FROM portus.cs.int:5000/prod/cs-base
 ARG destEnv
 ARG hyena_version
+ARG hyena_package
 MAINTAINER lm@cs.com
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -13,7 +14,7 @@ RUN adduser --no-create-home --system --shell /bin/false --gecos 'hyena dedicate
 
 RUN apt-get update
 RUN apt-get install -y nanomsg=*$destEnv
-RUN apt-get install -y hyena=${hyena_version:-"*"}
+RUN apt-get install -y ${hyena_package:-"hyena"}=${hyena_version:-"*"}
 
 VOLUME "/tmp/hyena"
 
