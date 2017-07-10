@@ -9,12 +9,12 @@ function status {
 
 }
 
-DOCKER_OPTIONS=""
+DOCKER_OPTIONS="--build-arg destEnv=$destEnv"
 
 if [[ $nocache == "true" ]]
 then
 	echo "Doing clean build"
-	DOCKER_OPTIONS="--no-cache"
+	DOCKER_OPTIONS="${DOCKER_OPTIONS} --no-cache"
 
 	# update builder image base
 	status "Updating builder base image"
@@ -111,7 +111,7 @@ else
 	HYENA_PACKAGE="hyena-dbg"
 fi
 
-docker build --build-arg destEnv=$destEnv \
+docker build \
 	--build-arg hyena_version="$PACKAGE_VERSION" \
 	--build-arg hyena_package=${HYENA_PACKAGE} \
 	${DOCKER_OPTIONS} \

@@ -1,4 +1,5 @@
 FROM portus.cs.int:5000/prod/rust-snmp-base
+ARG destEnv
 
 USER root
 
