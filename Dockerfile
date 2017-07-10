@@ -1,5 +1,13 @@
 FROM portus.cs.int:5000/prod/rust-snmp-base
 ARG destEnv
+ARG git_commit
+ARG git_source
+ARG jenkins_jobid
+
+LABEL maintainer="Jacek Całusiński <forger@collective-sense.com>" \
+	collective.git.commit="${git_commit}" \
+	collective.git.source="${git_source}" \
+	collective.jenkins.jobid="${jenkins_jobid}"
 
 USER root
 

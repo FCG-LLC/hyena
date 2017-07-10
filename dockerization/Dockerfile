@@ -2,10 +2,18 @@ FROM portus.cs.int:5000/prod/cs-base
 ARG destEnv
 ARG hyena_version
 ARG hyena_package
-MAINTAINER lm@cs.com
+ARG git_commit
+ARG git_source
+ARG jenkins_jobid
+
+LABEL maintainer="Jacek Całusiński <forger@collective-sense.com>" \
+	collective.git.commit="${git_commit}" \
+	collective.git.source="${git_source}" \
+	collective.jenkins.jobid="${jenkins_jobid}" \
+	collective.jenkins.build.package.name="${hyena_package}" \
+	collective.jenkins.build.package.version="${hyena_version}"
 
 ENV DEBIAN_FRONTEND=noninteractive
-
 
 RUN apt-get install apt-transport-https -y --force-yes
 

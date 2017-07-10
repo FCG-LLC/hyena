@@ -9,7 +9,7 @@ function status {
 
 }
 
-DOCKER_OPTIONS="--build-arg destEnv=$destEnv"
+DOCKER_OPTIONS="--build-arg destEnv=$destEnv --build-arg git_commit=${GIT_COMMIT} --build-arg git_source=${branch} --build-arg jenkins_jobid=${BUILD_ID}"
 
 if [[ $nocache == "true" ]]
 then
