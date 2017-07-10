@@ -59,7 +59,6 @@ docker run --rm \
 	-e ENABLE_GITHUB=0 \
     -v $(realpath source):/home/app/project/hyena \
     -v $(realpath artifacts):/artifacts \
-    ${DOCKER_OPTIONS} \
     hyena-builder hyena ${branch} deb
 
 rc=$?
