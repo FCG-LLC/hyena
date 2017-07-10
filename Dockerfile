@@ -15,6 +15,6 @@ RUN wget http://10.12.1.225/public/cs-repo.key -O - | apt-key add -
 
 RUN apt-get update
 
-RUN apt-get install -y nanomsg libnanomsg-dev
+RUN apt-get install -y nanomsg nanomsg-dev
 
 USER app
