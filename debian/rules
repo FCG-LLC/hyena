@@ -15,6 +15,6 @@ override_dh_auto_build:
 	which cargo
 	which rustc
 	mkdir -p .cargo
+	CARGO_HOME=.cargo cargo build
 	CARGO_HOME=.cargo cargo build --release
-	CARGO_HOME=.cargo cargo build --debug
 
