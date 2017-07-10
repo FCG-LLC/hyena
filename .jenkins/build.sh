@@ -107,7 +107,7 @@ if [[ "${build_type:-Release}" == "Release" ]]
 then
 	HYENA_PACKAGE="hyena"
 else
-	HYENA_PACKAGE="hyena-dbg"
+	HYENA_PACKAGE="hyena-debug"
 fi
 
 docker build \

@@ -11,11 +11,11 @@ Vcs-Git: https://github.com/FCG-LLC/hyena.git
 Package: hyena
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Conflicts: hyena-dbg
+Conflicts: hyena-debug
 Description: Hyena Data Store
  Hyena is an experimental, ultra fast data storage engine.
 
-Package: hyena-dbg
+Package: hyena-debug
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: hyena
