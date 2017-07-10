@@ -19,7 +19,7 @@ Pin-Priority: 1600 \
 " > /etc/apt/preferences
 
 RUN apt-get update
-RUN apt-get install -y nanomsg=*$destEnv
+RUN apt-get install -y nanomsg
 RUN apt-get install -y ${hyena_package:-"hyena"}=${hyena_version:-"*"}
 
 VOLUME "/tmp/hyena"
