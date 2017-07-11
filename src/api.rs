@@ -1,13 +1,20 @@
 use bincode::{serialize, deserialize, Infinite};
 use catalog::{BlockType, Column, PartitionInfo};
 use manager::{Manager, BlockCache};
-use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable};
+use int_blocks::{Block, Int32SparseBlock, Int64DenseBlock, Int64SparseBlock, Scannable, Deletable, Movable, Upsertable};
 use std::time::Instant;
 use scan::{BlockScanConsumer};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InsertMessage {
     pub row_count : u32,
+    pub col_count : u32,
+    pub col_types : Vec<(u32, BlockType)>,
+    pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PartialInsertMessage {
     pub col_count : u32,
     pub col_types : Vec<(u32, BlockType)>,
     pub blocks : Vec<Block> // This can be done right now only because blocks are so trivial
@@ -48,6 +55,20 @@ pub struct ScanRequest {
     pub filters : Vec<ScanFilter>
 }
 
+// Typically for log compaction only
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct DataCompactionRequest {
+    pub partition_id : u64,
+    // Defines conditions that are to be matched by records subject to compaction
+    pub filters : Vec<ScanFilter>,
+    // E.g. all fields stored in column 1234 are now to be pushed to column 5678
+    pub renamed_columns: Vec<(u32, u32)>,
+    // All fields stored in this columns will be removed
+    pub dropped_columns: Vec<u32>,
+    // Following defines values that will be updated for all matching records
+    pub upserted_data: PartialInsertMessage
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct RefreshCatalogResponse {
     pub columns: Vec<Column>,
@@ -79,7 +100,8 @@ pub enum ApiOperation {
     Scan,
     RefreshCatalog,
     AddColumn,
-    Flush
+    Flush,
+    DataCompaction
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -101,6 +123,13 @@ impl ApiMessage {
 
         let insert_message = deserialize(&self.payload[..]).unwrap();
         insert_message
+    }
+
+    pub fn extract_data_compaction_request(&self) -> DataCompactionRequest {
+        assert_eq!(self.op_type, ApiOperation::DataCompaction);
+
+        let compaction_request = deserialize(&self.payload[..]).unwrap();
+        compaction_request
     }
 
     pub fn extract_add_column_message(&self) -> AddColumnRequest {
@@ -160,7 +189,6 @@ fn consume_filters<'a>(manager : &'a Manager, cache: &'a mut BlockCache, filter:
         },
         _ => scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer)
     }
-//    scanned_block.scan(filter.op.clone(), &filter.val, &mut consumer);
 
     cache.cache_block(scanned_block, filter.column);
 
@@ -177,21 +205,10 @@ fn consume_filters<'a>(manager : &'a Manager, cache: &'a mut BlockCache, filter:
 //            x.scan(filter.op.clone(), &filter.val, &mut consumer);
 //        }
 //    };
-
 }
 
-pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
-    let scan_duration = Instant::now();
-
-    let mut total_matched = 0;
-    let mut total_materialized = 0;
-
-    let mut scan_msg = ScanResultMessage::new();
-
-    let part_info = &manager.find_partition_info(req.partition_id);
-
+fn part_scan_and_combine(manager: &Manager, part_info : &PartitionInfo, mut cache : &mut BlockCache, req : &ScanRequest) -> BlockScanConsumer {
     let mut consumers:Vec<BlockScanConsumer> = Vec::new();
-    let mut cache = BlockCache::new(part_info);
 
     if req.filters.is_empty() {
         let mut consumer = BlockScanConsumer{matching_offsets : Vec::new()};
@@ -205,11 +222,95 @@ pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanR
         }
     }
 
-    let combined_consumer = BlockScanConsumer::merge_and_scans(&consumers);
+    BlockScanConsumer::merge_and_scans(&consumers)
+}
+
+pub fn handle_data_compaction(manager: &Manager, req : &DataCompactionRequest) {
+    let part_info = &manager.find_partition_info(req.partition_id);
+    let mut cache = BlockCache::new(part_info);
+
+    let scan_req = ScanRequest {
+        min_ts: 0,
+        max_ts: u64::max_value(),
+        partition_id: req.partition_id,
+        filters: req.filters.to_owned(),
+        projection: vec![]
+    };
+
+    let combined_consumer = part_scan_and_combine(manager, part_info, &mut cache, &scan_req);
+
+    // We have the list of offsets now, lets modify blocks now
+
+    // 1. removed blocks
+    for col in &req.dropped_columns {
+        let mut cur = manager.load_block(part_info, *col);
+        cur.delete(&combined_consumer.matching_offsets);
+        manager.save_block(part_info, &cur, *col);
+    }
+
+    // 2. moved blocks
+    for col_pair in &req.renamed_columns {
+        let mut c0 = manager.load_block(part_info, col_pair.0);
+        let mut c1 = manager.load_block(part_info, col_pair.1);
+
+        c0.move_data(&mut c1, &combined_consumer);
+        manager.save_block(part_info, &c0, col_pair.0);
+        manager.save_block(part_info, &c1, col_pair.1);
+    }
+
+    // 3. upserted blocks
+    for col_no in 0..req.upserted_data.col_count {
+        let catalog_col_no = req.upserted_data.col_types[col_no as usize].0;
+        let mut block = manager.load_block(part_info, catalog_col_no);
+
+        // The input block actually contains just a single value that will be multi-upserted
+        let input_block = &req.upserted_data.blocks[col_no as usize];
+
+        if input_block.len() != 1 {
+            panic!("The upsert block can have only one record which is copied across all matching entries");
+        }
+
+        match &mut block {
+            &mut Block::StringBlock(ref mut b) => match input_block {
+                &Block::StringBlock(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.str_data.as_slice()),
+                _ => panic!("Non matching block types")
+            },
+            &mut Block::Int64Sparse(ref mut b) => match input_block {
+                &Block::Int64Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
+            &mut Block::Int32Sparse(ref mut b) => match input_block {
+                &Block::Int32Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
+            &mut Block::Int16Sparse(ref mut b) => match input_block {
+                &Block::Int16Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
+            &mut Block::Int8Sparse(ref mut b) => match input_block {
+                &Block::Int8Sparse(ref c) => b.multi_upsert(&combined_consumer.matching_offsets, c.data[0].1),
+                _ => panic!("Non matching block types")
+            },
+            _ => panic!("Not supported block type")
+        }
+
+        manager.save_block(part_info, &block, catalog_col_no);
+    }
+}
+
+pub fn part_scan_and_materialize(manager: &Manager, req : &ScanRequest) -> ScanResultMessage {
+    let scan_duration = Instant::now();
+
+    let part_info = &manager.find_partition_info(req.partition_id);
+    let mut cache = BlockCache::new(part_info);
+
+    let combined_consumer = part_scan_and_combine(manager, part_info, &mut cache, req);
+
+    let mut scan_msg = ScanResultMessage::new();
     combined_consumer.materialize(&manager, &mut cache, &req.projection, &mut scan_msg);
 
-    total_materialized += scan_msg.row_count;
-    total_matched += combined_consumer.matching_offsets.len();
+    let total_matched = combined_consumer.matching_offsets.len();
+    let total_materialized = scan_msg.row_count;
 
     println!("Scanning and matching/materializing {}/{} elements took {:?}", total_matched, total_materialized, scan_duration.elapsed());
 
@@ -223,6 +324,10 @@ fn string_filters() {
     assert_eq!("Te", filter_val);
 }
 
+#[test]
+fn data_compaction_test() {
+
+}
 
 #[test]
 fn inserting_works() {

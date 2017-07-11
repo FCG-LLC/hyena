@@ -2,7 +2,7 @@ use bincode::{serialize, deserialize, Infinite};
 
 use nanomsg::{Socket, Protocol, Error};
 
-use api::{ApiMessage, ApiOperation, part_scan_and_materialize, GenericResponse};
+use api::{ApiMessage, ApiOperation, part_scan_and_materialize, handle_data_compaction, GenericResponse, DataCompactionRequest};
 use manager::Manager;
 
 use std::io::{Read, Write};
@@ -68,6 +68,14 @@ pub fn start_endpoint(manager : &mut Manager) {
             ApiOperation::Flush => {
                 println!("Flush request");
                 manager.dump_in_mem_partition();
+
+                socket.write(&GenericResponse::create_as_buf(0));
+            },
+            ApiOperation::DataCompaction => {
+                println!("Data compaction");
+
+                let compaction_msg = &req.extract_data_compaction_request();
+                handle_data_compaction(manager, compaction_msg);
 
                 socket.write(&GenericResponse::create_as_buf(0));
             }

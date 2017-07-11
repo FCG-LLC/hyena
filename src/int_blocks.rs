@@ -9,7 +9,19 @@ use std::cmp;
 
 pub trait Scannable<T> {
     fn scan(&self, op : ScanComparison, val : &T, scan_consumer : &mut BlockScanConsumer);
-//    fn consume(&self, scan_consumer : &BlockScanConsumer) -> Block;
+}
+
+pub trait Deletable {
+    fn delete(&mut self, offsets : &Vec<u32>);
+}
+
+pub trait Upsertable<T> {
+    fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &T);
+    fn upsert(&mut self, data : &Block);
+}
+
+pub trait Movable {
+    fn move_data(&mut self, target : &mut Block, scan_consumer : &BlockScanConsumer);
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -79,6 +91,47 @@ impl Block {
     }
 }
 
+impl Deletable for Block {
+    fn delete(&mut self, offsets : &Vec<u32>) {
+        match self {
+            &mut Block::StringBlock(ref mut b) => b.delete(offsets),
+            &mut Block::Int64Sparse(ref mut b) => b.delete(offsets),
+            &mut Block::Int32Sparse(ref mut b) => b.delete(offsets),
+            &mut Block::Int16Sparse(ref mut b) => b.delete(offsets),
+            &mut Block::Int8Sparse(ref mut b) => b.delete(offsets),
+            _ => panic!("I don't know how to handle such block type")
+        }
+    }
+}
+
+impl Movable for Block {
+    fn move_data(&mut self, target: &mut Block, scan_consumer: &BlockScanConsumer) {
+        match self {
+            &mut Block::StringBlock(ref mut b) => match target {
+                &mut Block::StringBlock(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int64Sparse(ref mut b) => match target {
+                &mut Block::Int64Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int32Sparse(ref mut b) => match target {
+                &mut Block::Int32Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int16Sparse(ref mut b) => match target {
+                &mut Block::Int16Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            &mut Block::Int8Sparse(ref mut b) => match target {
+                &mut Block::Int8Sparse(ref mut c) => b.move_data(c, scan_consumer),
+                _ => panic!("Not matching block types")
+            },
+            _ => panic!("I don't know how to handle such block type")
+        }
+    }
+}
+
 impl Scannable<String> for Block {
     fn scan(&self, op: ScanComparison, val: &String, scan_consumer: &mut BlockScanConsumer) {
         match self {
@@ -88,12 +141,53 @@ impl Scannable<String> for Block {
     }
 }
 
+impl Upsertable<String> for Block {
+    fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &String) {
+        match self {
+            &mut Block::StringBlock(ref mut b) => b.multi_upsert(offsets, val.as_bytes()),
+            _ => panic!("Wrong block type for String scan")
+        }
+    }
+
+    fn upsert(&mut self, data : &Block) {
+        match self {
+            &mut Block::StringBlock(ref mut b) => match data {
+                &Block::StringBlock(ref c) => b.upsert(c),
+                _ => panic!("Wrong block type")
+            },
+            _ => panic!("Wrong block type")
+        }
+    }
+}
+
 impl Scannable<u64> for Block {
     fn scan(&self, op : ScanComparison, val : &u64, scan_consumer : &mut BlockScanConsumer) {
         match self {
             &Block::Int64Dense(ref b) => b.scan(op, val, scan_consumer),
             &Block::Int64Sparse(ref b) => b.scan(op, val, scan_consumer),
+            &Block::Int32Sparse(ref b) => b.scan(op, &(*val as u32), scan_consumer),
+            &Block::Int16Sparse(ref b) => b.scan(op, &(*val as u16), scan_consumer),
+            &Block::Int8Sparse(ref b) => b.scan(op, &(*val as u8), scan_consumer),
             _ => panic!("Unrecognized u64 block type")
+        }
+    }
+}
+
+impl Upsertable<u64> for Block {
+    fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &u64) {
+        match self {
+            &mut Block::Int64Sparse(ref mut b) => b.multi_upsert(offsets, *val),
+            _ => panic!("Wrong block type")
+        }
+    }
+
+    fn upsert(&mut self, data : &Block) {
+        match self {
+            &mut Block::Int64Sparse(ref mut b) => match data {
+                &Block::Int64Sparse(ref c) => b.upsert(c),
+                _ => panic!("Wrong block")
+            },
+            _ => panic!("Wrong block type")
         }
     }
 }
@@ -107,6 +201,25 @@ impl Scannable<u32> for Block {
     }
 }
 
+impl Upsertable<u32> for Block {
+    fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &u32) {
+        match self {
+            &mut Block::Int32Sparse(ref mut b) => b.multi_upsert(offsets, *val),
+            _ => panic!("Wrong block type")
+        }
+    }
+
+    fn upsert(&mut self, data : &Block) {
+        match self {
+            &mut Block::Int32Sparse(ref mut b) => match data {
+                &Block::Int32Sparse(ref c) => b.upsert(c),
+                _ => panic!("Wrong block type")
+            },
+            _ => panic!("Wrong block type")
+        }
+    }
+}
+
 impl Scannable<u16> for Block {
     fn scan(&self, op: ScanComparison, val: &u16, scan_consumer: &mut BlockScanConsumer) {
         match self {
@@ -116,11 +229,49 @@ impl Scannable<u16> for Block {
     }
 }
 
+impl Upsertable<u16> for Block {
+    fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &u16) {
+        match self {
+            &mut Block::Int16Sparse(ref mut b) => b.multi_upsert(offsets, *val),
+            _ => panic!("Wrong block type")
+        }
+    }
+
+    fn upsert(&mut self, data : &Block) {
+        match self {
+            &mut Block::Int16Sparse(ref mut b) => match data {
+                &Block::Int16Sparse(ref c) => b.upsert(c),
+                _ => panic!("Wrong block type")
+            },
+            _ => panic!("Wrong block type")
+        }
+    }
+}
+
 impl Scannable<u8> for Block {
     fn scan(&self, op: ScanComparison, val: &u8, scan_consumer: &mut BlockScanConsumer) {
         match self {
             &Block::Int8Sparse(ref b) => b.scan(op, val, scan_consumer),
             _ => println!("Unrecognized u8 block type")
+        }
+    }
+}
+
+impl Upsertable<u8> for Block {
+    fn multi_upsert(&mut self, offsets : &Vec<u32>, val : &u8) {
+        match self {
+            &mut Block::Int8Sparse(ref mut b) => b.multi_upsert(offsets, *val),
+            _ => panic!("Wrong block type")
+        }
+    }
+
+    fn upsert(&mut self, data : &Block) {
+        match self {
+            &mut Block::Int8Sparse(ref mut b) => match data {
+                &Block::Int8Sparse(ref c) => b.upsert(c),
+                _ => panic!("Wrong block type")
+            },
+            _ => panic!("Wrong block type")
         }
     }
 }
@@ -165,6 +316,170 @@ pub struct StringBlock {
 impl StringBlock {
     pub fn new() -> StringBlock {
         StringBlock{ index_data: Vec::new(), str_data: Vec::new() }
+    }
+
+    pub fn delete(&mut self, offsets: &Vec<u32>) {
+        // Because the structure is bit more complex here, lets just be naive and rewrite the str_data while updating index data?
+
+        let mut new_index_data:Vec<(u32, usize)> = Vec::new();
+        let mut new_str_data:Vec<u8> = Vec::new();
+
+        let mut offsets_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while data_index < self.index_data.len() {
+            let cur_index = self.index_data[data_index];
+            let cur_offset = cur_index.0;
+
+            while offsets_index < offsets.len() && offsets[offsets_index] < cur_offset {
+                offsets_index += 1;
+            }
+
+            // The next offset to remove is somewhere in front, so lets copy this entry
+            if offsets_index == offsets.len() || offsets[offsets_index] > cur_offset {
+
+                let end_str_index = if data_index == self.index_data.len()-1 {
+                    self.str_data.len()
+                } else {
+                    self.index_data[data_index+1].1
+                };
+
+                let last_index = new_str_data.len();
+                let cur_str_data = &self.str_data[cur_index.1..end_str_index];
+
+                new_index_data.push((cur_index.0, last_index));
+                new_str_data.extend_from_slice(cur_str_data);
+            }
+
+            data_index += 1;
+        }
+
+        self.index_data = new_index_data;
+        self.str_data = new_str_data;
+    }
+
+    pub fn multi_upsert(&mut self, offsets: &Vec<u32>, v: &[u8]) {
+        // Because the structure is bit more complex here, lets just be naive and rewrite the str_data while updating index data?
+
+        let mut new_index_data:Vec<(u32, usize)> = Vec::new();
+        let mut new_str_data:Vec<u8> = Vec::new();
+
+        let mut offsets_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while offsets_index < offsets.len() || data_index < self.index_data.len() {
+            let last_str_index = new_str_data.len();
+
+            let cur_offset = if data_index < self.index_data.len() {
+                self.index_data[data_index].0
+            } else {
+                offsets[offsets_index]
+            };
+
+            if offsets_index < offsets.len() && offsets[offsets_index] <= cur_offset {
+                // Update/insert the value
+                new_index_data.push((offsets[offsets_index], last_str_index));
+                new_str_data.extend_from_slice(v);
+
+                if offsets[offsets_index] == cur_offset {
+                    // If we did update rather then insert to a non-existing entry
+                    data_index += 1;
+                }
+
+                offsets_index += 1;
+            } else if data_index < self.index_data.len() {
+                let cur_index = self.index_data[data_index];
+
+                // Copy from existing block
+                let end_str_index = if data_index < self.index_data.len()-1 {
+                    self.index_data[data_index+1].1
+                } else {
+                    self.str_data.len()
+                };
+
+                let cur_str_data = &self.str_data[cur_index.1..end_str_index];
+                new_index_data.push((cur_index.0, last_str_index));
+                new_str_data.extend_from_slice(cur_str_data);
+
+                data_index += 1;
+            }
+        }
+
+        self.index_data = new_index_data;
+        self.str_data = new_str_data;
+    }
+
+    pub fn upsert(&mut self, data : &StringBlock) {
+        // Because the structure is bit more complex here, lets just be naive and rewrite the str_data while updating index data?
+        let mut new_index_data:Vec<(u32, usize)> = Vec::new();
+        let mut new_str_data:Vec<u8> = Vec::new();
+
+        let mut input_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while input_index < data.index_data.len() || data_index < self.index_data.len() {
+            let last_str_index = new_str_data.len();
+
+            let cur_offset = if data_index < self.index_data.len() {
+                self.index_data[data_index].0
+            } else {
+                data.index_data[input_index].0
+            };
+
+
+            if input_index < data.index_data.len() && data.index_data[input_index].0 <= cur_offset {
+                // Update/insert the value
+                new_index_data.push((data.index_data[input_index].0, last_str_index));
+                let input_str_end = if input_index == data.index_data.len()-1 {
+                    data.str_data.len()
+                } else {
+                    data.index_data[input_index+1].1
+                };
+
+                let input_str_slice = &data.str_data[data.index_data[input_index].1..input_str_end];
+                new_str_data.extend_from_slice(input_str_slice);
+
+                if data.index_data[input_index].0 == cur_offset {
+                    // If we did update rather then insert to a non-existing entry
+                    data_index += 1;
+                }
+
+                input_index += 1;
+            } else if data_index < self.index_data.len() {
+                let cur_index = self.index_data[data_index];
+
+                // Copy from existing block
+                let end_str_index = if data_index == self.index_data.len()-1 {
+                    self.str_data.len()
+                } else {
+                    self.index_data[data_index+1].1
+                };
+
+                let cur_str_data = &self.str_data[cur_index.1..end_str_index];
+                new_index_data.push((cur_index.0, last_str_index));
+                new_str_data.extend_from_slice(cur_str_data);
+
+                data_index += 1;
+            }
+        }
+
+        self.index_data = new_index_data;
+        self.str_data = new_str_data;
+    }
+
+    pub fn transpose_offsets(&mut self, new_offsets : &Vec<u32>) {
+        for i in 0..new_offsets.len() {
+            let record = &mut self.index_data[i];
+            record.0 = new_offsets[i];
+        }
+    }
+
+    pub fn move_data(&mut self, target : &mut StringBlock, scan_consumer : &BlockScanConsumer) {
+        let mut temp_block = self.filter_scan_results(scan_consumer);
+        temp_block.transpose_offsets(&scan_consumer.matching_offsets);
+
+        target.upsert(&temp_block);
+        self.delete(&scan_consumer.matching_offsets);
     }
 
     pub fn append(&mut self, o: u32, v: &[u8]) {
@@ -217,6 +532,116 @@ pub struct TSparseBlock<T:Clone> {
 impl<T : Clone> TSparseBlock<T> {
     pub fn append(&mut self, o: u32, v: T) {
         self.data.push((o, v));
+    }
+
+    pub fn delete(&mut self, offsets: &Vec<u32>) {
+        let mut indexes:Vec<usize> = Vec::new();
+
+        let mut offsets_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while offsets_index < offsets.len() && data_index < self.data.len() {
+            let target_offset = offsets[offsets_index];
+            while data_index < self.data.len() && self.data[data_index].0 < target_offset {
+                data_index += 1;
+            }
+
+            if data_index < self.data.len() && self.data[data_index].0 == target_offset {
+                indexes.push(data_index);
+                data_index += 1;
+            }
+
+            // Move on regardless
+            offsets_index += 1;
+        }
+
+        indexes.reverse();
+        for i in indexes {
+            self.data.remove(i);
+        }
+    }
+
+    pub fn transpose_offsets(&mut self, new_offsets : &Vec<u32>) {
+        for i in 0..new_offsets.len() {
+            let record = &mut self.data[i];
+            record.0 = new_offsets[i];
+        }
+    }
+
+    pub fn move_data(&mut self, target : &mut TSparseBlock<T>, scan_consumer : &BlockScanConsumer) {
+        let mut temp_block = self.filter_scan_results(scan_consumer);
+        temp_block.transpose_offsets(&scan_consumer.matching_offsets);
+        target.upsert(&temp_block);
+        self.delete(&scan_consumer.matching_offsets);
+    }
+
+    // Put specific value to multiple columns
+    pub fn multi_upsert(&mut self, offsets: &Vec<u32>, v: T) {
+        let mut indexes:Vec<usize> = Vec::new();
+
+        let mut offsets_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while offsets_index < offsets.len() {
+            let target_offset = offsets[offsets_index];
+
+            // Forward the self.data position to current offset
+            while data_index < self.data.len() && self.data[data_index].0 < target_offset {
+                data_index += 1;
+            }
+
+            if data_index < self.data.len() {
+                if self.data[data_index].0 == target_offset {
+                    let record = &mut self.data[data_index];
+                    record.1 = v.to_owned();
+                } else {
+                    // insert
+                    self.data.insert(data_index, (target_offset, v.to_owned()));
+                }
+            } else {
+                // append
+                self.data.push((target_offset, v.to_owned()));
+            }
+
+            // Move on regardless
+            offsets_index += 1;
+        }
+
+    }
+
+    // Upsert specific values
+    pub fn upsert(&mut self, upsert_data : &TSparseBlock<T>) {
+        let mut indexes:Vec<usize> = Vec::new();
+
+        let mut offsets_index = 0 as usize;
+        let mut data_index = 0 as usize;
+
+        while offsets_index < upsert_data.data.len() {
+            let target_offset = upsert_data.data[offsets_index].0;
+
+            // Forward the self.data position to current offset
+            while data_index < self.data.len() && self.data[data_index].0 < target_offset {
+                data_index += 1;
+            }
+
+            //self.data.insert()
+            if data_index < self.data.len() {
+                if self.data[data_index].0 == target_offset {
+                    let record = &mut self.data[data_index];
+                    record.1 = upsert_data.data[offsets_index].1.to_owned();
+                } else {
+                    // insert
+                    self.data.insert(data_index, (target_offset, upsert_data.data[offsets_index].1.to_owned()));
+                }
+            } else {
+                // append
+                self.data.push((target_offset, upsert_data.data[offsets_index].1.to_owned()));
+            }
+
+            // Move on regardless
+            offsets_index += 1;
+        }
+
     }
 
     pub fn filter_scan_results(&self, scan_consumer : &BlockScanConsumer) -> TSparseBlock<T> {
@@ -446,6 +871,159 @@ impl Scannable<u8> for Int8SparseBlock {
     }
 }
 
+
+#[test]
+fn delete_sparse_block() {
+    let mut input_block = Int32SparseBlock {
+        data: vec![
+            (1, 100),
+            (2, 200),
+            (3, 300),
+            (6, 600),
+            (8, 800),
+            (11, 1100)
+        ]
+    };
+
+    let mut expected_block = Int32SparseBlock {
+        data: vec![
+            (1, 100),
+            (8, 800),
+            (11, 1100)
+        ]
+    };
+
+    let offsets = vec![2,3,6];
+    input_block.delete(&offsets);
+
+    assert_eq!(expected_block, input_block);
+}
+
+#[test]
+fn delete_string_block() {
+    let mut input_block = StringBlock::new();
+    input_block.append(1, "foo".as_bytes());
+    input_block.append(2, "bar".as_bytes());
+    input_block.append(13, "snafu".as_bytes());
+
+
+    let mut expected_block = StringBlock::new();
+    expected_block.append(1, "foo".as_bytes());
+    expected_block.append(13, "snafu".as_bytes());
+
+    let offsets = vec![2,3,6];
+    input_block.delete(&offsets);
+
+    assert_eq!(expected_block, input_block);
+}
+
+
+#[test]
+fn multi_upsert_string_block() {
+    let mut input_block = StringBlock::new();
+    input_block.append(1, "foo".as_bytes());
+    input_block.append(2, "bar".as_bytes());
+    input_block.append(13, "snafu".as_bytes());
+
+
+    let mut expected_block = StringBlock::new();
+    expected_block.append(0, "lol".as_bytes());
+    expected_block.append(1, "foo".as_bytes());
+    expected_block.append(2, "lol".as_bytes());
+    expected_block.append(3, "lol".as_bytes());
+    expected_block.append(13, "snafu".as_bytes());
+
+    let offsets = vec![0,2,3];
+    input_block.multi_upsert(&offsets, "lol".as_bytes());
+
+    assert_eq!(expected_block, input_block);
+}
+
+#[test]
+fn upsert_string_block() {
+    let mut input_block = StringBlock::new();
+    input_block.append(1, "foo".as_bytes());
+    input_block.append(2, "bar".as_bytes());
+    input_block.append(13, "snafu".as_bytes());
+
+    let mut upsert_data = StringBlock::new();
+    upsert_data.append(0, "a0".as_bytes());
+    upsert_data.append(1, "b1".as_bytes());
+    upsert_data.append(3, "c2".as_bytes());
+
+
+    let mut expected_block = StringBlock::new();
+    expected_block.append(0, "a0".as_bytes());
+    expected_block.append(1, "b1".as_bytes());
+    expected_block.append(2, "bar".as_bytes());
+    expected_block.append(3, "c2".as_bytes());
+    expected_block.append(13, "snafu".as_bytes());
+
+    let offsets = vec![0,2,3];
+    input_block.upsert(&upsert_data);
+
+    assert_eq!(expected_block, input_block);
+}
+
+#[test]
+fn multi_upsert_sparse_block() {
+    let mut input_block = Int32SparseBlock {
+        data: vec![
+            (1, 100),
+            (8, 800),
+            (11, 1100)
+        ]
+    };
+
+    let mut expected_block = Int32SparseBlock {
+        data: vec![
+            (0, 9999),
+            (1, 9999),
+            (2, 9999),
+            (8, 800),
+            (11, 1100),
+            (12, 9999)
+        ]
+    };
+
+    let offsets = vec![0,1,2,12];
+    input_block.multi_upsert(&offsets, 9999);
+
+    assert_eq!(expected_block, input_block);
+
+}
+
+#[test]
+fn upsert_sparse_block() {
+    let mut input_block = Int32SparseBlock {
+        data: vec![
+            (1, 100),
+            (8, 800),
+            (11, 1100)
+        ]
+    };
+
+    let mut expected_block = Int32SparseBlock {
+        data: vec![
+            (1, 101),
+            (2, 202),
+            (8, 800),
+            (11, 1100),
+        ]
+    };
+
+    let upsert_data = Int32SparseBlock {
+        data: vec![
+            (1,101),
+            (2,202)
+        ]
+    };
+
+    input_block.upsert(&upsert_data);
+
+    assert_eq!(expected_block, input_block);
+
+}
 
 #[test]
 fn string_block() {
