@@ -76,7 +76,7 @@ APTLY_SERVER=http://10.12.1.225:8080
 for i in $artifacts; do
 	curl -X POST -F file=@$i $APTLY_SERVER/api/files/${i%_amd64.*}
 	curl -X POST $APTLY_SERVER/api/repos/main/file/${i%_amd64.*}
-	ssh -tt -i ~/.ssh/aptly_rsa yapee@10.12.1.225
+	ssh -tt -i ~/.ssh/aptly_rsa aptly@10.12.1.225
 done
 popd
 
