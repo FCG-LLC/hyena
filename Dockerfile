@@ -11,12 +11,12 @@ LABEL maintainer="Jacek Całusiński <forger@collective-sense.com>" \
 
 USER root
 
-RUN echo "deb http://10.12.1.225/public trusty main" | tee -a /etc/apt/sources.list
+RUN echo "deb http://aptly.cs.int/public trusty main" | tee -a /etc/apt/sources.list
 
-RUN echo "deb http://10.12.1.225/public xenial $destEnv" >> /etc/apt/sources.list
-RUN printf "Package: * \nPin: release a=xenial, o=10.12.1.225 \nPin-Priority: 1600 \n" > /etc/apt/preferences
+RUN echo "deb http://aptly.cs.int/public xenial $destEnv" >> /etc/apt/sources.list
+RUN printf "Package: * \nPin: release a=xenial, o=aptly.cs.int \nPin-Priority: 1600 \n" > /etc/apt/preferences
 
-RUN wget http://10.12.1.225/public/cs-repo.key -O - | apt-key add -
+RUN wget http://aptly.cs.int/public/cs-repo.key -O - | apt-key add -
 
 RUN apt-get update
 

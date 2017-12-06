@@ -82,13 +82,13 @@ then
 	exit $rc
 fi
 
-APTLY_SERVER=http://10.12.1.225:8080
+APTLY_SERVER=http://aptly.cs.int:8080
 for i in $artifacts; do
 	curl -X POST -F file=@$i $APTLY_SERVER/api/files/${i%_amd64.*}
 	curl -X POST $APTLY_SERVER/api/repos/${destEnv}/file/${i%_amd64.*}
 done
 
-	ssh -tt -i ~/.ssh/aptly_rsa aptly@10.12.1.225
+	ssh -tt -i ~/.ssh/aptly_rsa aptly@aptly.cs.int
 popd
 
 echo version="$VERSION" > env.properties
