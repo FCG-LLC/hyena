@@ -1,4 +1,13 @@
 #!/bin/bash
+function retry() {
+    count=$1
+    slp=$2
+    cmd=$3
+    ( for i in $(seq 0 $count); do 
+        [ $i -gt 0 ] && echo "---- Rerying $i time ----"; $cmd && break || [ $i -lt $count ] && echo "---- FAILURE, waiting $slp secs ----" && sleep $slp || exit;
+     done ) || return 1
+}
+
 
 set -ex
 
@@ -84,8 +93,8 @@ fi
 
 APTLY_SERVER=http://aptly.cs.int:8080
 for i in $artifacts; do
-	curl -X POST -F file=@$i $APTLY_SERVER/api/files/${i%_amd64.*}
-	curl -X POST $APTLY_SERVER/api/repos/${destEnv}/file/${i%_amd64.*}
+	retry 5 15 "curl -X POST -F file=@$i $APTLY_SERVER/api/files/${i%_amd64.*}"
+	retry 5 15 "curl -X POST $APTLY_SERVER/api/repos/${destEnv}/file/${i%_amd64.*}"
 done
 
 	ssh -tt -i ~/.ssh/aptly_rsa aptly@aptly.cs.int
@@ -118,4 +127,4 @@ docker build \
 
 status "Pushing runtime image"
 docker tag cs/$app portus.cs.int:5000/$destEnv/cs-$app
-docker push portus.cs.int:5000/$destEnv/cs-$app
+retry 5 15 "docker push portus.cs.int:5000/$destEnv/cs-$app"
